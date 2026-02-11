@@ -1,0 +1,8 @@
+[package]
+name = "mindtask"
+version = "0.1.0"
+edition = "2024"
+description = "A CLI tool combining mindmaps with task dependency graphs"
+license = "MIT"
+
+[dependencies]
