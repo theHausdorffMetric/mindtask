@@ -19,7 +19,8 @@ pub fn load(path: &Path) -> Result<Project> {
         return Err(StoreError::NotFound(path.display().to_string()));
     }
     let contents = std::fs::read_to_string(path)?;
-    let project: Project = serde_json::from_str(&contents)?;
+    let mut project: Project = serde_json::from_str(&contents)?;
+    project.recompute_next_ids();
     Ok(project)
 }
 

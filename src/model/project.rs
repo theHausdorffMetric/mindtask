@@ -34,7 +34,9 @@ pub struct Project {
     pub version: u32,
     pub concepts: Vec<Concept>,
     pub tasks: Vec<Task>,
+    #[serde(skip)]
     pub next_concept_id: u64,
+    #[serde(skip)]
     pub next_task_id: u64,
 }
 
@@ -47,6 +49,25 @@ impl Project {
             next_concept_id: 1,
             next_task_id: 1,
         }
+    }
+
+    /// Recompute next IDs from existing concepts and tasks.
+    /// Called after deserialization.
+    pub fn recompute_next_ids(&mut self) {
+        self.next_concept_id = self
+            .concepts
+            .iter()
+            .map(|c| c.id.0)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        self.next_task_id = self
+            .tasks
+            .iter()
+            .map(|t| t.id.0)
+            .max()
+            .unwrap_or(0)
+            + 1;
     }
 
     pub fn allocate_concept_id(&mut self) -> ConceptId {
@@ -301,7 +322,8 @@ mod tests {
         p.add_task("Do thing".into(), None, Some(1.5));
 
         let json = serde_json::to_string_pretty(&p).unwrap();
-        let parsed: Project = serde_json::from_str(&json).unwrap();
+        let mut parsed: Project = serde_json::from_str(&json).unwrap();
+        parsed.recompute_next_ids();
 
         assert_eq!(parsed.version, 1);
         assert_eq!(parsed.concepts.len(), 2);
