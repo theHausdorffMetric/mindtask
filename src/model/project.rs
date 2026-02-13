@@ -1,0 +1,475 @@
+use serde::{Deserialize, Serialize};
+
+use super::concept::Concept;
+use super::id::{ConceptId, TaskId};
+use super::task::{Task, TaskStatus};
+
+#[derive(Debug, thiserror::Error)]
+pub enum ProjectError {
+    #[error("concept {0} not found")]
+    ConceptNotFound(ConceptId),
+    #[error("task {0} not found")]
+    TaskNotFound(TaskId),
+    #[error("cannot remove concept {0}: it has child concepts")]
+    ConceptHasChildren(ConceptId),
+    #[error("cannot remove concept {0}: tasks reference it: {1:?}")]
+    ConceptReferencedByTasks(ConceptId, Vec<TaskId>),
+    #[error("cannot move concept {id} under {new_parent}: would create a cycle")]
+    ConceptCycleDetected {
+        id: ConceptId,
+        new_parent: ConceptId,
+    },
+    #[error("adding dependency {from} -> {to} would create a cycle")]
+    DependencyCycle { from: TaskId, to: TaskId },
+    #[error("duplicate dependency: {0} already depends on {1}")]
+    DuplicateDependency(TaskId, TaskId),
+    #[error("a task cannot depend on itself: {0}")]
+    SelfDependency(TaskId),
+}
+
+pub type Result<T> = std::result::Result<T, ProjectError>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub version: u32,
+    pub concepts: Vec<Concept>,
+    pub tasks: Vec<Task>,
+    pub next_concept_id: u64,
+    pub next_task_id: u64,
+}
+
+impl Project {
+    pub fn new() -> Self {
+        Self {
+            version: 1,
+            concepts: Vec::new(),
+            tasks: Vec::new(),
+            next_concept_id: 1,
+            next_task_id: 1,
+        }
+    }
+
+    pub fn allocate_concept_id(&mut self) -> ConceptId {
+        let id = ConceptId(self.next_concept_id);
+        self.next_concept_id += 1;
+        id
+    }
+
+    pub fn allocate_task_id(&mut self) -> TaskId {
+        let id = TaskId(self.next_task_id);
+        self.next_task_id += 1;
+        id
+    }
+
+    // --- Concept operations ---
+
+    pub fn get_concept(&self, id: ConceptId) -> Option<&Concept> {
+        self.concepts.iter().find(|c| c.id == id)
+    }
+
+    pub fn children_of(&self, id: ConceptId) -> Vec<&Concept> {
+        self.concepts
+            .iter()
+            .filter(|c| c.parent == Some(id))
+            .collect()
+    }
+
+    pub fn roots(&self) -> Vec<&Concept> {
+        self.concepts.iter().filter(|c| c.parent.is_none()).collect()
+    }
+
+    pub fn add_concept(
+        &mut self,
+        name: String,
+        parent: Option<ConceptId>,
+        description: Option<String>,
+    ) -> Result<ConceptId> {
+        if let Some(pid) = parent
+            && self.get_concept(pid).is_none()
+        {
+            return Err(ProjectError::ConceptNotFound(pid));
+        }
+        let id = self.allocate_concept_id();
+        self.concepts.push(Concept {
+            id,
+            name,
+            description,
+            parent,
+        });
+        Ok(id)
+    }
+
+    pub fn remove_concept(&mut self, id: ConceptId) -> Result<()> {
+        if self.get_concept(id).is_none() {
+            return Err(ProjectError::ConceptNotFound(id));
+        }
+
+        let children = self.children_of(id);
+        if !children.is_empty() {
+            return Err(ProjectError::ConceptHasChildren(id));
+        }
+
+        let referencing_tasks: Vec<TaskId> = self
+            .tasks
+            .iter()
+            .filter(|t| t.concepts.contains(&id))
+            .map(|t| t.id)
+            .collect();
+        if !referencing_tasks.is_empty() {
+            return Err(ProjectError::ConceptReferencedByTasks(id, referencing_tasks));
+        }
+
+        self.concepts.retain(|c| c.id != id);
+        Ok(())
+    }
+
+    pub fn move_concept(&mut self, id: ConceptId, new_parent: Option<ConceptId>) -> Result<()> {
+        if self.get_concept(id).is_none() {
+            return Err(ProjectError::ConceptNotFound(id));
+        }
+
+        if let Some(pid) = new_parent {
+            if self.get_concept(pid).is_none() {
+                return Err(ProjectError::ConceptNotFound(pid));
+            }
+            if pid == id {
+                return Err(ProjectError::ConceptCycleDetected {
+                    id,
+                    new_parent: pid,
+                });
+            }
+            if crate::graph::tree::is_ancestor(self, id, pid) {
+                return Err(ProjectError::ConceptCycleDetected {
+                    id,
+                    new_parent: pid,
+                });
+            }
+        }
+
+        let concept = self.concepts.iter_mut().find(|c| c.id == id).unwrap();
+        concept.parent = new_parent;
+        Ok(())
+    }
+
+    // --- Task operations ---
+
+    pub fn get_task(&self, id: TaskId) -> Option<&Task> {
+        self.tasks.iter().find(|t| t.id == id)
+    }
+
+    pub fn get_task_mut(&mut self, id: TaskId) -> Option<&mut Task> {
+        self.tasks.iter_mut().find(|t| t.id == id)
+    }
+
+    pub fn add_task(
+        &mut self,
+        title: String,
+        description: Option<String>,
+        duration: Option<f64>,
+    ) -> TaskId {
+        let id = self.allocate_task_id();
+        self.tasks.push(Task {
+            id,
+            title,
+            description,
+            duration,
+            status: TaskStatus::default(),
+            depends_on: Vec::new(),
+            concepts: Vec::new(),
+        });
+        id
+    }
+
+    pub fn remove_task(&mut self, id: TaskId) -> Result<()> {
+        if self.get_task(id).is_none() {
+            return Err(ProjectError::TaskNotFound(id));
+        }
+        self.tasks.retain(|t| t.id != id);
+        // Clean up references from other tasks
+        for task in &mut self.tasks {
+            task.depends_on.retain(|&dep| dep != id);
+        }
+        Ok(())
+    }
+
+    pub fn add_dependency(&mut self, task_id: TaskId, depends_on_id: TaskId) -> Result<()> {
+        if task_id == depends_on_id {
+            return Err(ProjectError::SelfDependency(task_id));
+        }
+        if self.get_task(task_id).is_none() {
+            return Err(ProjectError::TaskNotFound(task_id));
+        }
+        if self.get_task(depends_on_id).is_none() {
+            return Err(ProjectError::TaskNotFound(depends_on_id));
+        }
+
+        let task = self.get_task(task_id).unwrap();
+        if task.depends_on.contains(&depends_on_id) {
+            return Err(ProjectError::DuplicateDependency(task_id, depends_on_id));
+        }
+
+        // Temporarily add the dependency to check for cycles
+        let task = self.get_task_mut(task_id).unwrap();
+        task.depends_on.push(depends_on_id);
+
+        if crate::graph::dag::has_cycle(&self.tasks) {
+            // Roll back
+            let task = self.get_task_mut(task_id).unwrap();
+            task.depends_on.pop();
+            return Err(ProjectError::DependencyCycle {
+                from: task_id,
+                to: depends_on_id,
+            });
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_dependency(&mut self, task_id: TaskId, depends_on_id: TaskId) -> Result<()> {
+        let task = self
+            .get_task_mut(task_id)
+            .ok_or(ProjectError::TaskNotFound(task_id))?;
+        task.depends_on.retain(|&d| d != depends_on_id);
+        Ok(())
+    }
+
+    pub fn link_concept(&mut self, task_id: TaskId, concept_id: ConceptId) -> Result<()> {
+        if self.get_concept(concept_id).is_none() {
+            return Err(ProjectError::ConceptNotFound(concept_id));
+        }
+        let task = self
+            .get_task_mut(task_id)
+            .ok_or(ProjectError::TaskNotFound(task_id))?;
+        if !task.concepts.contains(&concept_id) {
+            task.concepts.push(concept_id);
+        }
+        Ok(())
+    }
+
+    pub fn unlink_concept(&mut self, task_id: TaskId, concept_id: ConceptId) -> Result<()> {
+        let task = self
+            .get_task_mut(task_id)
+            .ok_or(ProjectError::TaskNotFound(task_id))?;
+        task.concepts.retain(|&c| c != concept_id);
+        Ok(())
+    }
+
+    pub fn set_task_status(&mut self, id: TaskId, status: TaskStatus) -> Result<()> {
+        let task = self
+            .get_task_mut(id)
+            .ok_or(ProjectError::TaskNotFound(id))?;
+        task.status = status;
+        Ok(())
+    }
+}
+
+impl Default for Project {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_project() {
+        let p = Project::new();
+        assert_eq!(p.version, 1);
+        assert!(p.concepts.is_empty());
+        assert!(p.tasks.is_empty());
+        assert_eq!(p.next_concept_id, 1);
+        assert_eq!(p.next_task_id, 1);
+    }
+
+    #[test]
+    fn allocate_ids() {
+        let mut p = Project::new();
+        assert_eq!(p.allocate_concept_id(), ConceptId(1));
+        assert_eq!(p.allocate_concept_id(), ConceptId(2));
+        assert_eq!(p.allocate_task_id(), TaskId(1));
+        assert_eq!(p.allocate_task_id(), TaskId(2));
+    }
+
+    #[test]
+    fn project_serde_roundtrip() {
+        let mut p = Project::new();
+        p.add_concept("Root".into(), None, None).unwrap();
+        p.add_concept("Child".into(), Some(ConceptId(1)), Some("desc".into()))
+            .unwrap();
+        p.add_task("Do thing".into(), None, Some(1.5));
+
+        let json = serde_json::to_string_pretty(&p).unwrap();
+        let parsed: Project = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.version, 1);
+        assert_eq!(parsed.concepts.len(), 2);
+        assert_eq!(parsed.tasks.len(), 1);
+        assert_eq!(parsed.next_concept_id, 3);
+        assert_eq!(parsed.next_task_id, 2);
+    }
+
+    // --- Concept CRUD tests ---
+
+    #[test]
+    fn add_concept_with_invalid_parent() {
+        let mut p = Project::new();
+        let err = p
+            .add_concept("Orphan".into(), Some(ConceptId(99)), None)
+            .unwrap_err();
+        assert!(matches!(err, ProjectError::ConceptNotFound(_)));
+    }
+
+    #[test]
+    fn remove_concept_with_children_fails() {
+        let mut p = Project::new();
+        p.add_concept("Parent".into(), None, None).unwrap();
+        p.add_concept("Child".into(), Some(ConceptId(1)), None)
+            .unwrap();
+        let err = p.remove_concept(ConceptId(1)).unwrap_err();
+        assert!(matches!(err, ProjectError::ConceptHasChildren(_)));
+    }
+
+    #[test]
+    fn remove_concept_referenced_by_task_fails() {
+        let mut p = Project::new();
+        p.add_concept("Topic".into(), None, None).unwrap();
+        let tid = p.add_task("Work".into(), None, None);
+        p.link_concept(tid, ConceptId(1)).unwrap();
+        let err = p.remove_concept(ConceptId(1)).unwrap_err();
+        assert!(matches!(err, ProjectError::ConceptReferencedByTasks(_, _)));
+    }
+
+    #[test]
+    fn remove_leaf_concept_succeeds() {
+        let mut p = Project::new();
+        p.add_concept("Leaf".into(), None, None).unwrap();
+        p.remove_concept(ConceptId(1)).unwrap();
+        assert!(p.concepts.is_empty());
+    }
+
+    #[test]
+    fn move_concept_prevents_self_parent() {
+        let mut p = Project::new();
+        p.add_concept("A".into(), None, None).unwrap();
+        let err = p.move_concept(ConceptId(1), Some(ConceptId(1))).unwrap_err();
+        assert!(matches!(err, ProjectError::ConceptCycleDetected { .. }));
+    }
+
+    #[test]
+    fn move_concept_prevents_cycle() {
+        let mut p = Project::new();
+        p.add_concept("A".into(), None, None).unwrap();
+        p.add_concept("B".into(), Some(ConceptId(1)), None).unwrap();
+        p.add_concept("C".into(), Some(ConceptId(2)), None).unwrap();
+        // Moving A under C would create A->B->C->A cycle
+        let err = p.move_concept(ConceptId(1), Some(ConceptId(3))).unwrap_err();
+        assert!(matches!(err, ProjectError::ConceptCycleDetected { .. }));
+    }
+
+    #[test]
+    fn move_concept_succeeds() {
+        let mut p = Project::new();
+        p.add_concept("A".into(), None, None).unwrap();
+        p.add_concept("B".into(), None, None).unwrap();
+        p.add_concept("C".into(), Some(ConceptId(1)), None).unwrap();
+        // Move C from under A to under B
+        p.move_concept(ConceptId(3), Some(ConceptId(2))).unwrap();
+        assert_eq!(p.get_concept(ConceptId(3)).unwrap().parent, Some(ConceptId(2)));
+    }
+
+    #[test]
+    fn children_of_and_roots() {
+        let mut p = Project::new();
+        p.add_concept("R1".into(), None, None).unwrap();
+        p.add_concept("R2".into(), None, None).unwrap();
+        p.add_concept("C1".into(), Some(ConceptId(1)), None).unwrap();
+        p.add_concept("C2".into(), Some(ConceptId(1)), None).unwrap();
+
+        assert_eq!(p.roots().len(), 2);
+        assert_eq!(p.children_of(ConceptId(1)).len(), 2);
+        assert_eq!(p.children_of(ConceptId(2)).len(), 0);
+    }
+
+    // --- Task CRUD tests ---
+
+    #[test]
+    fn add_and_remove_task() {
+        let mut p = Project::new();
+        let id = p.add_task("Test".into(), None, None);
+        assert_eq!(id, TaskId(1));
+        assert_eq!(p.tasks.len(), 1);
+        p.remove_task(id).unwrap();
+        assert!(p.tasks.is_empty());
+    }
+
+    #[test]
+    fn remove_task_cleans_up_deps() {
+        let mut p = Project::new();
+        let t1 = p.add_task("A".into(), None, None);
+        let t2 = p.add_task("B".into(), None, None);
+        p.add_dependency(t2, t1).unwrap();
+        assert_eq!(p.get_task(t2).unwrap().depends_on.len(), 1);
+        p.remove_task(t1).unwrap();
+        assert!(p.get_task(t2).unwrap().depends_on.is_empty());
+    }
+
+    #[test]
+    fn self_dependency_fails() {
+        let mut p = Project::new();
+        let t1 = p.add_task("A".into(), None, None);
+        let err = p.add_dependency(t1, t1).unwrap_err();
+        assert!(matches!(err, ProjectError::SelfDependency(_)));
+    }
+
+    #[test]
+    fn duplicate_dependency_fails() {
+        let mut p = Project::new();
+        let t1 = p.add_task("A".into(), None, None);
+        let t2 = p.add_task("B".into(), None, None);
+        p.add_dependency(t2, t1).unwrap();
+        let err = p.add_dependency(t2, t1).unwrap_err();
+        assert!(matches!(err, ProjectError::DuplicateDependency(_, _)));
+    }
+
+    #[test]
+    fn cycle_detection() {
+        let mut p = Project::new();
+        let t1 = p.add_task("A".into(), None, None);
+        let t2 = p.add_task("B".into(), None, None);
+        let t3 = p.add_task("C".into(), None, None);
+        p.add_dependency(t2, t1).unwrap(); // B depends on A
+        p.add_dependency(t3, t2).unwrap(); // C depends on B
+        let err = p.add_dependency(t1, t3).unwrap_err(); // A depends on C -> cycle!
+        assert!(matches!(err, ProjectError::DependencyCycle { .. }));
+        // Verify t1 was not modified
+        assert!(p.get_task(t1).unwrap().depends_on.is_empty());
+    }
+
+    #[test]
+    fn link_unlink_concept() {
+        let mut p = Project::new();
+        p.add_concept("Topic".into(), None, None).unwrap();
+        let t1 = p.add_task("Work".into(), None, None);
+        p.link_concept(t1, ConceptId(1)).unwrap();
+        assert_eq!(p.get_task(t1).unwrap().concepts.len(), 1);
+        // Idempotent
+        p.link_concept(t1, ConceptId(1)).unwrap();
+        assert_eq!(p.get_task(t1).unwrap().concepts.len(), 1);
+        // Unlink
+        p.unlink_concept(t1, ConceptId(1)).unwrap();
+        assert!(p.get_task(t1).unwrap().concepts.is_empty());
+    }
+
+    #[test]
+    fn set_task_status() {
+        let mut p = Project::new();
+        let t1 = p.add_task("Work".into(), None, None);
+        assert_eq!(p.get_task(t1).unwrap().status, TaskStatus::Todo);
+        p.set_task_status(t1, TaskStatus::InProgress).unwrap();
+        assert_eq!(p.get_task(t1).unwrap().status, TaskStatus::InProgress);
+        p.set_task_status(t1, TaskStatus::Done).unwrap();
+        assert_eq!(p.get_task(t1).unwrap().status, TaskStatus::Done);
+    }
+}
