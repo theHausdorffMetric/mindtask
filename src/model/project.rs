@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use super::concept::Concept;
 use super::id::{ConceptId, TaskId};
-use super::task::{Task, TaskStatus};
+use super::task::{Task, TaskState};
+use jiff::Zoned;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectError {
@@ -32,6 +33,8 @@ pub type Result<T> = std::result::Result<T, ProjectError>;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
     pub concepts: Vec<Concept>,
     pub tasks: Vec<Task>,
     #[serde(skip)]
@@ -44,11 +47,17 @@ impl Project {
     pub fn new() -> Self {
         Self {
             version: 1,
+            timezone: None,
             concepts: Vec::new(),
             tasks: Vec::new(),
             next_concept_id: 1,
             next_task_id: 1,
         }
+    }
+
+    /// Return the project timezone name, falling back to "UTC".
+    pub fn timezone_or_utc(&self) -> &str {
+        self.timezone.as_deref().unwrap_or("UTC")
     }
 
     /// Recompute next IDs from existing concepts and tasks.
@@ -187,6 +196,7 @@ impl Project {
         name: String,
         description: Option<String>,
         duration: Option<f64>,
+        due: Option<Zoned>,
     ) -> TaskId {
         let id = self.allocate_task_id();
         self.tasks.push(Task {
@@ -194,7 +204,8 @@ impl Project {
             name,
             description,
             duration,
-            status: TaskStatus::default(),
+            state: TaskState::default(),
+            due,
             depends_on: Vec::new(),
             concepts: Vec::new(),
         });
@@ -275,11 +286,19 @@ impl Project {
         Ok(())
     }
 
-    pub fn set_task_status(&mut self, id: TaskId, status: TaskStatus) -> Result<()> {
+    pub fn set_task_state(&mut self, id: TaskId, state: TaskState) -> Result<()> {
         let task = self
             .get_task_mut(id)
             .ok_or(ProjectError::TaskNotFound(id))?;
-        task.status = status;
+        task.state = state;
+        Ok(())
+    }
+
+    pub fn set_task_due(&mut self, id: TaskId, due: Option<Zoned>) -> Result<()> {
+        let task = self
+            .get_task_mut(id)
+            .ok_or(ProjectError::TaskNotFound(id))?;
+        task.due = due;
         Ok(())
     }
 }
@@ -319,7 +338,7 @@ mod tests {
         p.add_concept("Root".into(), None, None).unwrap();
         p.add_concept("Child".into(), Some(ConceptId(1)), Some("desc".into()))
             .unwrap();
-        p.add_task("Do thing".into(), None, Some(1.5));
+        p.add_task("Do thing".into(), None, Some(1.5), None);
 
         let json = serde_json::to_string_pretty(&p).unwrap();
         let mut parsed: Project = serde_json::from_str(&json).unwrap();
@@ -357,7 +376,7 @@ mod tests {
     fn remove_concept_referenced_by_task_fails() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        let tid = p.add_task("Work".into(), None, None);
+        let tid = p.add_task("Work".into(), None, None, None);
         p.link_concept(tid, ConceptId(1)).unwrap();
         let err = p.remove_concept(ConceptId(1)).unwrap_err();
         assert!(matches!(err, ProjectError::ConceptReferencedByTasks(_, _)));
@@ -419,7 +438,7 @@ mod tests {
     #[test]
     fn add_and_remove_task() {
         let mut p = Project::new();
-        let id = p.add_task("Test".into(), None, None);
+        let id = p.add_task("Test".into(), None, None, None);
         assert_eq!(id, TaskId(1));
         assert_eq!(p.tasks.len(), 1);
         p.remove_task(id).unwrap();
@@ -429,8 +448,8 @@ mod tests {
     #[test]
     fn remove_task_cleans_up_deps() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None);
-        let t2 = p.add_task("B".into(), None, None);
+        let t1 = p.add_task("A".into(), None, None, None);
+        let t2 = p.add_task("B".into(), None, None, None);
         p.add_dependency(t2, t1).unwrap();
         assert_eq!(p.get_task(t2).unwrap().depends_on.len(), 1);
         p.remove_task(t1).unwrap();
@@ -440,7 +459,7 @@ mod tests {
     #[test]
     fn self_dependency_fails() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None);
+        let t1 = p.add_task("A".into(), None, None, None);
         let err = p.add_dependency(t1, t1).unwrap_err();
         assert!(matches!(err, ProjectError::SelfDependency(_)));
     }
@@ -448,8 +467,8 @@ mod tests {
     #[test]
     fn duplicate_dependency_fails() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None);
-        let t2 = p.add_task("B".into(), None, None);
+        let t1 = p.add_task("A".into(), None, None, None);
+        let t2 = p.add_task("B".into(), None, None, None);
         p.add_dependency(t2, t1).unwrap();
         let err = p.add_dependency(t2, t1).unwrap_err();
         assert!(matches!(err, ProjectError::DuplicateDependency(_, _)));
@@ -458,9 +477,9 @@ mod tests {
     #[test]
     fn cycle_detection() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None);
-        let t2 = p.add_task("B".into(), None, None);
-        let t3 = p.add_task("C".into(), None, None);
+        let t1 = p.add_task("A".into(), None, None, None);
+        let t2 = p.add_task("B".into(), None, None, None);
+        let t3 = p.add_task("C".into(), None, None, None);
         p.add_dependency(t2, t1).unwrap(); // B depends on A
         p.add_dependency(t3, t2).unwrap(); // C depends on B
         let err = p.add_dependency(t1, t3).unwrap_err(); // A depends on C -> cycle!
@@ -473,7 +492,7 @@ mod tests {
     fn link_unlink_concept() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        let t1 = p.add_task("Work".into(), None, None);
+        let t1 = p.add_task("Work".into(), None, None, None);
         p.link_concept(t1, ConceptId(1)).unwrap();
         assert_eq!(p.get_task(t1).unwrap().concepts.len(), 1);
         // Idempotent
@@ -485,13 +504,13 @@ mod tests {
     }
 
     #[test]
-    fn set_task_status() {
+    fn set_task_state() {
         let mut p = Project::new();
-        let t1 = p.add_task("Work".into(), None, None);
-        assert_eq!(p.get_task(t1).unwrap().status, TaskStatus::Todo);
-        p.set_task_status(t1, TaskStatus::InProgress).unwrap();
-        assert_eq!(p.get_task(t1).unwrap().status, TaskStatus::InProgress);
-        p.set_task_status(t1, TaskStatus::Done).unwrap();
-        assert_eq!(p.get_task(t1).unwrap().status, TaskStatus::Done);
+        let t1 = p.add_task("Work".into(), None, None, None);
+        assert_eq!(p.get_task(t1).unwrap().state, TaskState::Todo);
+        p.set_task_state(t1, TaskState::InProgress).unwrap();
+        assert_eq!(p.get_task(t1).unwrap().state, TaskState::InProgress);
+        p.set_task_state(t1, TaskState::Done).unwrap();
+        assert_eq!(p.get_task(t1).unwrap().state, TaskState::Done);
     }
 }

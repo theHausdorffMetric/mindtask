@@ -100,9 +100,9 @@ mod tests {
     #[test]
     fn topological_order_basic() {
         let mut p = Project::new();
-        p.add_task("A".into(), None, None);
-        p.add_task("B".into(), None, None);
-        p.add_task("C".into(), None, None);
+        p.add_task("A".into(), None, None, None);
+        p.add_task("B".into(), None, None, None);
+        p.add_task("C".into(), None, None, None);
         p.add_dependency(TaskId(2), TaskId(1)).unwrap(); // B depends on A
         p.add_dependency(TaskId(3), TaskId(2)).unwrap(); // C depends on B
 
@@ -118,8 +118,8 @@ mod tests {
     fn validate_project_valid() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        let t1 = p.add_task("A".into(), None, None);
-        p.add_task("B".into(), None, None);
+        let t1 = p.add_task("A".into(), None, None, None);
+        p.add_task("B".into(), None, None, None);
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         p.link_concept(t1, ConceptId(1)).unwrap();
         assert!(validate_project(&p).is_ok());
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn validate_dag_invalid_ref() {
         let mut p = Project::new();
-        p.add_task("A".into(), None, None);
+        p.add_task("A".into(), None, None, None);
         // Manually add a bad dependency
         p.tasks[0].depends_on.push(TaskId(99));
         assert!(validate_dag(&p.tasks).is_err());
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn validate_project_bad_concept_ref() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None);
+        let t1 = p.add_task("A".into(), None, None, None);
         // Manually add bad concept reference
         p.get_task_mut(t1).unwrap().concepts.push(ConceptId(99));
         assert!(validate_project(&p).is_err());
@@ -158,11 +158,11 @@ mod tests {
             .unwrap();
 
         // Build tasks
-        p.add_task("Design API".into(), None, Some(2.0));
-        p.add_task("Implement API".into(), None, Some(5.0));
-        p.add_task("Design DB".into(), None, Some(1.0));
-        p.add_task("Implement DB".into(), None, Some(3.0));
-        p.add_task("Frontend prototype".into(), None, Some(4.0));
+        p.add_task("Design API".into(), None, Some(2.0), None);
+        p.add_task("Implement API".into(), None, Some(5.0), None);
+        p.add_task("Design DB".into(), None, Some(1.0), None);
+        p.add_task("Implement DB".into(), None, Some(3.0), None);
+        p.add_task("Frontend prototype".into(), None, Some(4.0), None);
 
         // Dependencies
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();

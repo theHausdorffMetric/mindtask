@@ -1,4 +1,5 @@
 mod concept;
+mod config;
 mod project;
 mod search;
 mod task;
@@ -9,7 +10,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
 use mindtask::model::id::{ConceptId, TaskId};
-use mindtask::model::task::TaskStatus;
+use mindtask::model::task::TaskState;
 
 const PROJECT_FILE: &str = ".mindtask.json";
 
@@ -23,7 +24,11 @@ pub struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Initialize a new project in the current directory
-    Init,
+    Init {
+        /// Default timezone (IANA name, e.g. "America/New_York")
+        #[arg(long)]
+        timezone: Option<String>,
+    },
     /// Manage concepts in the concept tree
     #[command(subcommand)]
     Concept(ConceptCommand),
@@ -57,6 +62,9 @@ enum Command {
     },
     /// Validate the project file
     Validate,
+    /// Manage project configuration
+    #[command(subcommand)]
+    Config(ConfigCommand),
 }
 
 #[derive(Subcommand)]
@@ -106,6 +114,9 @@ enum TaskCommand {
         /// Duration in days
         #[arg(long)]
         duration: Option<f64>,
+        /// Due date (e.g. 2025-03-15T14:00, 2025-03-15T14:00[America/New_York])
+        #[arg(long)]
+        due: Option<String>,
     },
     /// Remove a task
     Rm {
@@ -119,12 +130,22 @@ enum TaskCommand {
         /// Task ID (e.g. 1)
         id: TaskId,
     },
-    /// Set the status of a task
-    Status {
+    /// Set the state of a task
+    State {
         /// Task ID (e.g. 1)
         id: TaskId,
-        /// New status: todo, in_progress, or done
-        status: TaskStatus,
+        /// New state: todo, in_progress, or done
+        state: TaskState,
+    },
+    /// Set or clear the due date of a task
+    Due {
+        /// Task ID (e.g. 1)
+        id: TaskId,
+        /// Due date (e.g. 2025-03-15T14:00, 2025-03-15T14:00[America/New_York])
+        date: Option<String>,
+        /// Clear the due date
+        #[arg(long)]
+        clear: bool,
     },
 }
 
@@ -143,6 +164,18 @@ enum DependCommand {
         task_id: TaskId,
         /// Dependency to remove (e.g. 1)
         depends_on: TaskId,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommand {
+    /// Get or set the project timezone
+    Timezone {
+        /// Timezone to set (IANA name, e.g. "America/New_York")
+        timezone: Option<String>,
+        /// Show the current timezone
+        #[arg(long)]
+        show: bool,
     },
 }
 
@@ -178,7 +211,7 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Init => project::init(),
+        Command::Init { timezone } => project::init(timezone),
         Command::Validate => {
             let path = find_project_file()?;
             let proj = load_project(&path)?;
@@ -214,7 +247,8 @@ pub fn run() -> Result<()> {
                     name,
                     description,
                     duration,
-                } => task::add(&mut proj, name, description, duration),
+                    due,
+                } => task::add(&mut proj, name, description, duration, due)?,
                 TaskCommand::Rm { id } => task::remove(&mut proj, id)?,
                 TaskCommand::Ls => {
                     task::list(&proj);
@@ -224,7 +258,10 @@ pub fn run() -> Result<()> {
                     task::show(&proj, id)?;
                     return Ok(());
                 }
-                TaskCommand::Status { id, status } => task::set_status(&mut proj, id, status)?,
+                TaskCommand::State { id, state } => task::set_state(&mut proj, id, state)?,
+                TaskCommand::Due { id, date, clear } => {
+                    task::set_due(&mut proj, id, date, clear)?
+                }
             }
             save_project(&path, &proj)
         }
@@ -265,6 +302,18 @@ pub fn run() -> Result<()> {
             let path = find_project_file()?;
             let proj = load_project(&path)?;
             search::search(&proj, &query, description);
+            Ok(())
+        }
+        Command::Config(cmd) => {
+            let path = find_project_file()?;
+            let mut proj = load_project(&path)?;
+            match cmd {
+                ConfigCommand::Timezone { timezone, show } => {
+                    if config::timezone(&mut proj, timezone, show)? {
+                        save_project(&path, &proj)?;
+                    }
+                }
+            }
             Ok(())
         }
     }

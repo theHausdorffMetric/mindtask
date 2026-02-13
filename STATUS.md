@@ -2,7 +2,7 @@
 
 ## Current Phase: Core complete — ready for visualization
 
-Phases 1–4 are implemented: data model, concept tree, task DAG, and CLI. The tool is usable for creating and managing projects from the command line.
+Phases 1–4 are implemented: data model, concept tree, task DAG, and CLI. Due dates with timezone support have been added. The tool is usable for creating and managing projects from the command line.
 
 ## What's Done
 
@@ -30,7 +30,7 @@ Phases 1–4 are implemented: data model, concept tree, task DAG, and CLI. The t
 
 ### Phase 3: Task DAG Operations
 - [x] Add, remove, list, show tasks
-- [x] Task status: `todo` / `in_progress` / `done`
+- [x] Task state: `todo` / `in_progress` / `done`
 - [x] Dependency management with petgraph-based cycle detection
 - [x] Task removal cleans up dependency references in other tasks
 - [x] Concept linking/unlinking (many-to-many, idempotent)
@@ -40,12 +40,24 @@ Phases 1–4 are implemented: data model, concept tree, task DAG, and CLI. The t
 ### Phase 4: CLI Interface
 - [x] `mindtask init` — create `.mindtask.json`
 - [x] `mindtask concept add/rm/mv/ls/show`
-- [x] `mindtask task add/rm/ls/show/status`
+- [x] `mindtask task add/rm/ls/show/state`
+- [x] `mindtask task due` — set/clear due dates
 - [x] `mindtask depend add/rm`
 - [x] `mindtask link/unlink`
 - [x] `mindtask validate`
+- [x] `mindtask config timezone` — get/set project timezone
 - [x] Project file discovery (walks up parent dirs like `.git`)
 - [x] Clear error messages (cycle rejection, missing refs, etc.)
+
+### Phase 4.5: Due Dates & Timezones
+- [x] `due: Option<Zoned>` on tasks (RFC 9557 serialization via `jiff`)
+- [x] `--due` flag on `task add`
+- [x] `task due <id> <date>` / `task due <id> --clear` subcommand
+- [x] Project-level default timezone (`timezone` field in project JSON)
+- [x] `mindtask init --timezone` to set timezone at creation
+- [x] `mindtask config timezone` to get/set timezone after creation
+- [x] Due dates displayed in project timezone in `task show`, `task ls`, `search`
+- [x] Flexible input parsing: full RFC 9557, datetime, or date-only (falls back to project tz)
 
 ## Architecture
 
@@ -65,7 +77,7 @@ src/
 |---|---|
 | Project file | `.mindtask.json` (hidden dotfile) |
 | ID format | Auto-increment integers (separate sequences per type) |
-| Task status | `todo` / `in_progress` / `done` |
+| Task state | `todo` / `in_progress` / `done` |
 | Dependency types | Finish-to-start only |
 | File format version | `"version": 1` in JSON root |
 | Error handling | `thiserror` in library, `anyhow` in CLI |

@@ -2,16 +2,51 @@ use anyhow::{Context, Result};
 
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
-use mindtask::model::task::TaskStatus;
+use mindtask::model::task::{parse_due, TaskState};
+
+/// Format a Zoned datetime for display, converting to the project timezone.
+fn format_due(due: &jiff::Zoned, project: &Project) -> String {
+    let tz_name = project.timezone_or_utc();
+    if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
+        let converted = due.with_time_zone(tz);
+        format!("{}", converted)
+    } else {
+        format!("{}", due)
+    }
+}
+
+/// Format a short due date for list columns (date + time, no seconds).
+fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
+    let tz_name = project.timezone_or_utc();
+    let z = if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
+        due.with_time_zone(tz)
+    } else {
+        due.clone()
+    };
+    format!(
+        "{}-{:02}-{:02} {:02}:{:02}",
+        z.year(),
+        z.month(),
+        z.day(),
+        z.hour(),
+        z.minute()
+    )
+}
 
 pub fn add(
     project: &mut Project,
     name: String,
     description: Option<String>,
     duration: Option<f64>,
-) {
-    let id = project.add_task(name.clone(), description, duration);
+    due: Option<String>,
+) -> Result<()> {
+    let due = due
+        .map(|d| parse_due(&d, project.timezone_or_utc()))
+        .transpose()
+        .context("invalid due date")?;
+    let id = project.add_task(name.clone(), description, duration, due);
     println!("Added task {} \"{}\"", id, name);
+    Ok(())
 }
 
 pub fn remove(project: &mut Project, id: TaskId) -> Result<()> {
@@ -31,8 +66,8 @@ pub fn list(project: &Project) {
     }
 
     println!(
-        "{:<6} {:<25} {:<14} {:<15} CONCEPTS",
-        "ID", "NAME", "STATUS", "DEPENDS ON"
+        "{:<6} {:<25} {:<14} {:<18} {:<15} CONCEPTS",
+        "ID", "NAME", "STATE", "DUE", "DEPENDS ON"
     );
     for task in &project.tasks {
         let deps = if task.depends_on.is_empty() {
@@ -53,9 +88,14 @@ pub fn list(project: &Project) {
                 .collect::<Vec<_>>()
                 .join(", ")
         };
+        let due = task
+            .due
+            .as_ref()
+            .map(|d| format_due_short(d, project))
+            .unwrap_or_else(|| "-".to_string());
         println!(
-            "{:<6} {:<25} {:<14} {:<15} {}",
-            task.id, task.name, task.status, deps, concepts
+            "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
+            task.id, task.name, task.state, due, deps, concepts
         );
     }
 }
@@ -73,7 +113,10 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
     if let Some(dur) = task.duration {
         println!("Duration:    {} days", dur);
     }
-    println!("Status:      {}", task.status);
+    println!("State:       {}", task.state);
+    if let Some(due) = &task.due {
+        println!("Due:         {}", format_due(due, project));
+    }
 
     if !task.depends_on.is_empty() {
         let dep_strs: Vec<String> = task
@@ -108,11 +151,35 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
     Ok(())
 }
 
-pub fn set_status(project: &mut Project, id: TaskId, status: TaskStatus) -> Result<()> {
+pub fn set_state(project: &mut Project, id: TaskId, state: TaskState) -> Result<()> {
     project
-        .set_task_status(id, status)
-        .context("failed to set task status")?;
-    println!("Set {} status to {}", id, status);
+        .set_task_state(id, state)
+        .context("failed to set task state")?;
+    println!("Set {} state to {}", id, state);
+    Ok(())
+}
+
+pub fn set_due(
+    project: &mut Project,
+    id: TaskId,
+    date: Option<String>,
+    clear: bool,
+) -> Result<()> {
+    if clear {
+        project
+            .set_task_due(id, None)
+            .context("failed to clear due date")?;
+        println!("Cleared due date for {}", id);
+    } else if let Some(date_str) = date {
+        let due = parse_due(&date_str, project.timezone_or_utc())
+            .context("invalid due date")?;
+        project
+            .set_task_due(id, Some(due.clone()))
+            .context("failed to set due date")?;
+        println!("Set {} due to {}", id, format_due(&due, project));
+    } else {
+        anyhow::bail!("provide a date or use --clear");
+    }
     Ok(())
 }
 

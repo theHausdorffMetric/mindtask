@@ -30,14 +30,15 @@ Concept Tree                Task DAG
 
 ```json
 {
+  "timezone": "America/New_York",
   "concepts": [
     { "id": 1, "name": "Project" },
     { "id": 2, "name": "Backend", "parent": 1 },
     { "id": 3, "name": "API", "parent": 2 }
   ],
   "tasks": [
-    { "id": 1, "name": "Design API", "status": "done", "concepts": [3] },
-    { "id": 2, "name": "Implement API", "status": "todo", "depends_on": [1], "concepts": [3] }
+    { "id": 1, "name": "Design API", "state": "done", "concepts": [3] },
+    { "id": 2, "name": "Implement API", "state": "todo", "due": "2025-03-15T14:00:00-04:00[America/New_York]", "depends_on": [1], "concepts": [3] }
   ]
 }
 ```
@@ -57,7 +58,9 @@ Concept Tree                Task DAG
 - Add/remove/move concepts in the tree
 - Add/remove tasks with dependency validation (cycle detection)
 - Link tasks to concepts (many-to-many)
-- Task status tracking (todo / in_progress / done)
+- Task state tracking (todo / in_progress / done)
+- Due dates with timezone support (RFC 9557 / IANA timezones via `jiff`)
+- Project-level default timezone
 - Project validation (tree integrity + DAG acyclicity + reference checks)
 - JSON persistence (`.mindtask.json`, human-readable)
 - Full CLI with project file discovery

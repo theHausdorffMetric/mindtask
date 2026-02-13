@@ -4,6 +4,23 @@ fn matches(haystack: &str, query: &str) -> bool {
     haystack.to_lowercase().contains(query)
 }
 
+fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
+    let tz_name = project.timezone_or_utc();
+    let z = if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
+        due.with_time_zone(tz)
+    } else {
+        due.clone()
+    };
+    format!(
+        "{}-{:02}-{:02} {:02}:{:02}",
+        z.year(),
+        z.month(),
+        z.day(),
+        z.hour(),
+        z.minute()
+    )
+}
+
 pub fn search(project: &Project, query: &str, search_description: bool) {
     let query = query.to_lowercase();
 
@@ -48,8 +65,8 @@ pub fn search(project: &Project, query: &str, search_description: bool) {
             println!();
         }
         println!(
-            "{:<6} {:<25} {:<14} {:<15} CONCEPTS",
-            "ID", "NAME", "STATUS", "DEPENDS ON"
+            "{:<6} {:<25} {:<14} {:<18} {:<15} CONCEPTS",
+            "ID", "NAME", "STATE", "DUE", "DEPENDS ON"
         );
         for task in &matching_tasks {
             let deps = if task.depends_on.is_empty() {
@@ -70,9 +87,14 @@ pub fn search(project: &Project, query: &str, search_description: bool) {
                     .collect::<Vec<_>>()
                     .join(", ")
             };
+            let due = task
+                .due
+                .as_ref()
+                .map(|d| format_due_short(d, project))
+                .unwrap_or_else(|| "-".to_string());
             println!(
-                "{:<6} {:<25} {:<14} {:<15} {}",
-                task.id, task.name, task.status, deps, concepts
+                "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
+                task.id, task.name, task.state, due, deps, concepts
             );
         }
     }

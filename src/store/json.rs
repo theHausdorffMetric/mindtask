@@ -43,7 +43,7 @@ mod tests {
         project
             .add_concept("Child".into(), Some(ConceptId(1)), Some("desc".into()))
             .unwrap();
-        project.add_task("Do stuff".into(), Some("details".into()), Some(2.5));
+        project.add_task("Do stuff".into(), Some("details".into()), Some(2.5), None);
 
         let file = NamedTempFile::new().unwrap();
         save(file.path(), &project).unwrap();
