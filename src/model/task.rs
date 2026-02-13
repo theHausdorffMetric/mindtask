@@ -40,7 +40,7 @@ impl std::str::FromStr for TaskStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: TaskId,
-    pub title: String,
+    pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -77,7 +77,7 @@ mod tests {
     fn task_serde_roundtrip() {
         let task = Task {
             id: TaskId(1),
-            title: "Design API".to_string(),
+            name: "Design API".to_string(),
             description: Some("Design the REST API".to_string()),
             duration: Some(2.0),
             status: TaskStatus::InProgress,
@@ -87,7 +87,7 @@ mod tests {
         let json = serde_json::to_string_pretty(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.id, task.id);
-        assert_eq!(parsed.title, task.title);
+        assert_eq!(parsed.name, task.name);
         assert_eq!(parsed.status, TaskStatus::InProgress);
         assert_eq!(parsed.concepts.len(), 1);
     }
@@ -96,7 +96,7 @@ mod tests {
     fn task_skips_empty_vecs() {
         let task = Task {
             id: TaskId(1),
-            title: "Simple".to_string(),
+            name: "Simple".to_string(),
             description: None,
             duration: None,
             status: TaskStatus::Todo,

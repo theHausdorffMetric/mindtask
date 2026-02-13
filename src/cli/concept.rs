@@ -101,7 +101,7 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
     if !linked_tasks.is_empty() {
         let task_strs: Vec<String> = linked_tasks
             .iter()
-            .map(|t| format!("{} ({})", t.id, t.title))
+            .map(|t| format!("{} ({})", t.id, t.name))
             .collect();
         println!("Tasks:       {}", task_strs.join(", "));
     }

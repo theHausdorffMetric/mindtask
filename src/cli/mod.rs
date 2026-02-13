@@ -89,8 +89,8 @@ enum ConceptCommand {
 enum TaskCommand {
     /// Add a new task
     Add {
-        /// Title of the task
-        title: String,
+        /// Name of the task
+        name: String,
         /// Description
         #[arg(long)]
         description: Option<String>,
@@ -202,10 +202,10 @@ pub fn run() -> Result<()> {
             let mut proj = load_project(&path)?;
             match cmd {
                 TaskCommand::Add {
-                    title,
+                    name,
                     description,
                     duration,
-                } => task::add(&mut proj, title, description, duration),
+                } => task::add(&mut proj, name, description, duration),
                 TaskCommand::Rm { id } => task::remove(&mut proj, id)?,
                 TaskCommand::Ls => {
                     task::list(&proj);

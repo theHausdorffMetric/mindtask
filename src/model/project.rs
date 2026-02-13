@@ -163,14 +163,14 @@ impl Project {
 
     pub fn add_task(
         &mut self,
-        title: String,
+        name: String,
         description: Option<String>,
         duration: Option<f64>,
     ) -> TaskId {
         let id = self.allocate_task_id();
         self.tasks.push(Task {
             id,
-            title,
+            name,
             description,
             duration,
             status: TaskStatus::default(),

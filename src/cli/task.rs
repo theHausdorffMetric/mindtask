@@ -6,21 +6,21 @@ use mindtask::model::task::TaskStatus;
 
 pub fn add(
     project: &mut Project,
-    title: String,
+    name: String,
     description: Option<String>,
     duration: Option<f64>,
 ) {
-    let id = project.add_task(title.clone(), description, duration);
-    println!("Added task {} \"{}\"", id, title);
+    let id = project.add_task(name.clone(), description, duration);
+    println!("Added task {} \"{}\"", id, name);
 }
 
 pub fn remove(project: &mut Project, id: TaskId) -> Result<()> {
-    let title = project
+    let name = project
         .get_task(id)
-        .map(|t| t.title.clone())
+        .map(|t| t.name.clone())
         .unwrap_or_default();
     project.remove_task(id).context("failed to remove task")?;
-    println!("Removed task {} \"{}\"", id, title);
+    println!("Removed task {} \"{}\"", id, name);
     Ok(())
 }
 
@@ -32,7 +32,7 @@ pub fn list(project: &Project) {
 
     println!(
         "{:<6} {:<25} {:<14} {:<15} CONCEPTS",
-        "ID", "TITLE", "STATUS", "DEPENDS ON"
+        "ID", "NAME", "STATUS", "DEPENDS ON"
     );
     for task in &project.tasks {
         let deps = if task.depends_on.is_empty() {
@@ -55,7 +55,7 @@ pub fn list(project: &Project) {
         };
         println!(
             "{:<6} {:<25} {:<14} {:<15} {}",
-            task.id, task.title, task.status, deps, concepts
+            task.id, task.name, task.status, deps, concepts
         );
     }
 }
@@ -66,7 +66,7 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("task {} not found", id))?;
 
     println!("ID:          {}", task.id);
-    println!("Title:       {}", task.title);
+    println!("Name:        {}", task.name);
     if let Some(desc) = &task.description {
         println!("Description: {}", desc);
     }
@@ -80,11 +80,11 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
             .depends_on
             .iter()
             .map(|d| {
-                let title = project
+                let name = project
                     .get_task(*d)
-                    .map(|t| t.title.as_str())
+                    .map(|t| t.name.as_str())
                     .unwrap_or("???");
-                format!("{} ({})", d, title)
+                format!("{} ({})", d, name)
             })
             .collect();
         println!("Depends on:  {}", dep_strs.join(", "));
