@@ -18,12 +18,12 @@ Tasks reference concepts, creating a bridge between *what you're thinking about*
 ```
 Concept Tree                Task DAG
 
-  Project                   t1: Design API ──→ t3: Integrate
-  ├── Backend               t2: Design DB ───┘
+  Project                   1: Design API ──→ 3: Integrate
+  ├── Backend               2: Design DB ───┘
   │   ├── API
-  │   └── Database          t1.concepts = [API]
-  └── Frontend              t2.concepts = [Database]
-      └── Components        t3.concepts = [API, Database]
+  │   └── Database          task 1 concepts = [API]
+  └── Frontend              task 2 concepts = [Database]
+      └── Components        task 3 concepts = [API, Database]
 ```
 
 ## Data Model
@@ -31,13 +31,13 @@ Concept Tree                Task DAG
 ```json
 {
   "concepts": [
-    { "id": "c1", "name": "Project", "parent": null },
-    { "id": "c2", "name": "Backend", "parent": "c1" },
-    { "id": "c3", "name": "API", "parent": "c2" }
+    { "id": 1, "name": "Project" },
+    { "id": 2, "name": "Backend", "parent": 1 },
+    { "id": 3, "name": "API", "parent": 2 }
   ],
   "tasks": [
-    { "id": "t1", "name": "Design API", "status": "done", "concepts": ["c3"] },
-    { "id": "t2", "name": "Implement API", "status": "todo", "depends_on": ["t1"], "concepts": ["c3"] }
+    { "id": 1, "name": "Design API", "status": "done", "concepts": [3] },
+    { "id": 2, "name": "Implement API", "status": "todo", "depends_on": [1], "concepts": [3] }
   ]
 }
 ```
@@ -50,7 +50,7 @@ Concept Tree                Task DAG
 | Task structure | DAG | Dependencies must be acyclic for scheduling to work. |
 | Linking | Tasks → Concepts | Keeps the concept tree clean and independent. |
 | Storage | Single JSON file | Human-readable, versionable with git, no database needed. |
-| IDs | Type-prefixed integers (`c1`, `t1`) | Easy to type in a CLI, easy to distinguish at a glance. |
+| IDs | Auto-increment integers | Simple to type, context distinguishes concepts from tasks. |
 
 ## Features
 

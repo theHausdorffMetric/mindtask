@@ -34,16 +34,16 @@ enum Command {
     Depend(DependCommand),
     /// Link a task to a concept
     Link {
-        /// Task ID (e.g. t1)
+        /// Task ID (e.g. 1)
         task_id: TaskId,
-        /// Concept ID (e.g. c1)
+        /// Concept ID (e.g. 1)
         concept_id: ConceptId,
     },
     /// Unlink a task from a concept
     Unlink {
-        /// Task ID (e.g. t1)
+        /// Task ID (e.g. 1)
         task_id: TaskId,
-        /// Concept ID (e.g. c1)
+        /// Concept ID (e.g. 1)
         concept_id: ConceptId,
     },
     /// Validate the project file
@@ -56,7 +56,7 @@ enum ConceptCommand {
     Add {
         /// Name of the concept
         name: String,
-        /// Parent concept ID (e.g. c1)
+        /// Parent concept ID (e.g. 1)
         #[arg(long)]
         parent: Option<ConceptId>,
         /// Description
@@ -65,14 +65,14 @@ enum ConceptCommand {
     },
     /// Remove a concept
     Rm {
-        /// Concept ID to remove (e.g. c1)
+        /// Concept ID to remove (e.g. 1)
         id: ConceptId,
     },
     /// Move a concept to a new parent
     Mv {
-        /// Concept ID to move (e.g. c1)
+        /// Concept ID to move (e.g. 1)
         id: ConceptId,
-        /// New parent concept ID (e.g. c2), or "root" to make it a root concept
+        /// New parent concept ID (e.g. 2), or "root" to make it a root concept
         #[arg(long)]
         parent: String,
     },
@@ -80,7 +80,7 @@ enum ConceptCommand {
     Ls,
     /// Show details of a concept
     Show {
-        /// Concept ID (e.g. c1)
+        /// Concept ID (e.g. 1)
         id: ConceptId,
     },
 }
@@ -100,19 +100,19 @@ enum TaskCommand {
     },
     /// Remove a task
     Rm {
-        /// Task ID to remove (e.g. t1)
+        /// Task ID to remove (e.g. 1)
         id: TaskId,
     },
     /// List all tasks
     Ls,
     /// Show details of a task
     Show {
-        /// Task ID (e.g. t1)
+        /// Task ID (e.g. 1)
         id: TaskId,
     },
     /// Set the status of a task
     Status {
-        /// Task ID (e.g. t1)
+        /// Task ID (e.g. 1)
         id: TaskId,
         /// New status: todo, in_progress, or done
         status: TaskStatus,
@@ -123,16 +123,16 @@ enum TaskCommand {
 enum DependCommand {
     /// Add a dependency between tasks
     Add {
-        /// Task that depends on another (e.g. t2)
+        /// Task that depends on another (e.g. 2)
         task_id: TaskId,
-        /// Task that must finish first (e.g. t1)
+        /// Task that must finish first (e.g. 1)
         depends_on: TaskId,
     },
     /// Remove a dependency between tasks
     Rm {
-        /// Task that has the dependency (e.g. t2)
+        /// Task that has the dependency (e.g. 2)
         task_id: TaskId,
-        /// Dependency to remove (e.g. t1)
+        /// Dependency to remove (e.g. 1)
         depends_on: TaskId,
     },
 }

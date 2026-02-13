@@ -54,7 +54,7 @@ mod tests {
             parent: Some(ConceptId(1)),
         };
         let json = serde_json::to_string(&concept).unwrap();
-        assert!(json.contains("\"c1\""));
+        assert!(json.contains("\"parent\":1"));
         let parsed: Concept = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.parent, Some(ConceptId(1)));
     }

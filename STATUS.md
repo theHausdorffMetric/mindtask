@@ -18,7 +18,7 @@ Phases 1–4 are implemented: data model, concept tree, task DAG, and CLI. The t
 ### Phase 1: Core Data Model
 - [x] `Concept` and `Task` structs with serde
 - [x] JSON file load/save (`.mindtask.json`, pretty-printed)
-- [x] Type-prefixed auto-increment IDs (`c1`, `c2`, `t1`, `t2`)
+- [x] Auto-increment integer IDs (separate sequences for concepts and tasks)
 - [x] `Project` container with version field for future-proofing
 - [x] 43 unit tests covering serialization round-trips, ID parsing, error cases
 
@@ -64,7 +64,7 @@ src/
 | Decision | Choice |
 |---|---|
 | Project file | `.mindtask.json` (hidden dotfile) |
-| ID format | Type-prefixed integers: `c1`, `c2`, `t1`, `t2` |
+| ID format | Auto-increment integers (separate sequences per type) |
 | Task status | `todo` / `in_progress` / `done` |
 | Dependency types | Finish-to-start only |
 | File format version | `"version": 1` in JSON root |

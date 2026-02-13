@@ -35,7 +35,7 @@ pub fn mv(project: &mut Project, id: ConceptId, parent_str: &str) -> Result<()> 
         Some(
             parent_str
                 .parse::<ConceptId>()
-                .context("invalid parent ID (use a concept ID like 'c1' or 'root')")?,
+                .context("invalid parent ID (use a concept ID like '1' or 'root')")?,
         )
     };
 
