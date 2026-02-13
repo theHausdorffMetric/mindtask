@@ -36,8 +36,8 @@ Concept Tree                Task DAG
     { "id": "c3", "name": "API", "parent": "c2" }
   ],
   "tasks": [
-    { "id": "t1", "title": "Design API", "depends_on": [], "concepts": ["c3"] },
-    { "id": "t2", "title": "Implement API", "depends_on": ["t1"], "concepts": ["c3"] }
+    { "id": "t1", "name": "Design API", "status": "done", "concepts": ["c3"] },
+    { "id": "t2", "name": "Implement API", "status": "todo", "depends_on": ["t1"], "concepts": ["c3"] }
   ]
 }
 ```
@@ -52,14 +52,22 @@ Concept Tree                Task DAG
 | Storage | Single JSON file | Human-readable, versionable with git, no database needed. |
 | IDs | Type-prefixed integers (`c1`, `t1`) | Easy to type in a CLI, easy to distinguish at a glance. |
 
-## Planned Features
+## Features
 
 - Add/remove/move concepts in the tree
 - Add/remove tasks with dependency validation (cycle detection)
-- Link tasks to concepts
+- Link tasks to concepts (many-to-many)
+- Task status tracking (todo / in_progress / done)
+- Project validation (tree integrity + DAG acyclicity + reference checks)
+- JSON persistence (`.mindtask.json`, human-readable)
+- Full CLI with project file discovery
+
+### Planned
+
 - Tree and DAG visualization in the terminal
 - Critical path analysis for tasks with durations
 - Gantt-style timeline output
+- Interactive TUI
 
 ## Documentation
 

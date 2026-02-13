@@ -28,7 +28,7 @@ A CLI tool that combines two structures:
 
 **Task** (node in a DAG):
 - `id`: unique identifier
-- `title`: display name
+- `name`: display name
 - `description`: optional text
 - `duration`: optional (enables Gantt scheduling)
 - `depends_on`: list of task IDs (must be acyclic)
