@@ -1,13 +1,20 @@
+//! The concept (category/topic) type.
+
 use serde::{Deserialize, Serialize};
 
 use super::id::ConceptId;
 
+/// A named category that tasks can be grouped under.
+///
+/// Concepts form a tree via the optional [`parent`](Self::parent) field.
+/// A concept with no parent is a root node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Concept {
     pub id: ConceptId,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Parent concept, or `None` for root concepts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<ConceptId>,
 }

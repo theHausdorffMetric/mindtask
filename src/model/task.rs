@@ -1,9 +1,12 @@
+//! The task type and related helpers.
+
 use anyhow::{Context, Result};
 use jiff::Zoned;
 use serde::{Deserialize, Serialize};
 
 use super::id::{ConceptId, TaskId};
 
+/// Workflow state of a task.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskState {
@@ -39,20 +42,25 @@ impl std::str::FromStr for TaskState {
     }
 }
 
+/// A unit of work that can depend on other tasks and be tagged with concepts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: TaskId,
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Estimated duration in arbitrary units (e.g. hours).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
     #[serde(default, alias = "status")]
     pub state: TaskState,
+    /// Timezone-aware due date.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub due: Option<Zoned>,
+    /// Tasks that must complete before this one can start.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub depends_on: Vec<TaskId>,
+    /// Concepts this task is tagged with.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub concepts: Vec<ConceptId>,
 }

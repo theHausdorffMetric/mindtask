@@ -1,10 +1,18 @@
+//! Typed identifiers for concepts and tasks.
+//!
+//! Both [`ConceptId`] and [`TaskId`] are thin wrappers around `u64`, providing
+//! type safety so the two ID spaces cannot be accidentally mixed. They implement
+//! `Display`, `FromStr`, and serde traits.
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
+/// Unique identifier for a [`Concept`](super::concept::Concept).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ConceptId(pub u64);
 
+/// Unique identifier for a [`Task`](super::task::Task).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TaskId(pub u64);
 
@@ -24,6 +32,7 @@ impl fmt::Display for TaskId {
 
 // --- FromStr ---
 
+/// Errors returned when parsing an ID from a string.
 #[derive(Debug, thiserror::Error)]
 pub enum IdParseError {
     #[error("invalid concept ID: expected a positive integer, got '{0}'")]

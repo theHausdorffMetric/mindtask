@@ -1,3 +1,8 @@
+//! The top-level project container and all mutation operations.
+//!
+//! [`Project`] owns the concept tree and task list, allocates IDs, and enforces
+//! structural invariants (no cycles, no dangling references) on every mutation.
+
 use serde::{Deserialize, Serialize};
 
 use super::concept::Concept;
@@ -5,6 +10,7 @@ use super::id::{ConceptId, TaskId};
 use super::task::{Task, TaskState};
 use jiff::Zoned;
 
+/// Errors from project mutation operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectError {
     #[error("concept {0} not found")]
@@ -28,11 +34,17 @@ pub enum ProjectError {
     SelfDependency(TaskId),
 }
 
+/// Convenience alias for results from project operations.
 pub type Result<T> = std::result::Result<T, ProjectError>;
 
+/// Root container holding all concepts, tasks, and project metadata.
+///
+/// ID counters (`next_concept_id`, `next_task_id`) are not serialized — they
+/// are recomputed from the stored data via [`recompute_next_ids`](Self::recompute_next_ids).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub version: u32,
+    /// Default IANA timezone for due-date parsing (e.g. `"America/New_York"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timezone: Option<String>,
     pub concepts: Vec<Concept>,
@@ -44,6 +56,7 @@ pub struct Project {
 }
 
 impl Project {
+    /// Create an empty project with version 1.
     pub fn new() -> Self {
         Self {
             version: 1,
@@ -79,12 +92,14 @@ impl Project {
             + 1;
     }
 
+    /// Allocate and return the next unused [`ConceptId`].
     pub fn allocate_concept_id(&mut self) -> ConceptId {
         let id = ConceptId(self.next_concept_id);
         self.next_concept_id += 1;
         id
     }
 
+    /// Allocate and return the next unused [`TaskId`].
     pub fn allocate_task_id(&mut self) -> TaskId {
         let id = TaskId(self.next_task_id);
         self.next_task_id += 1;
@@ -93,10 +108,12 @@ impl Project {
 
     // --- Concept operations ---
 
+    /// Look up a concept by ID.
     pub fn get_concept(&self, id: ConceptId) -> Option<&Concept> {
         self.concepts.iter().find(|c| c.id == id)
     }
 
+    /// Return the direct children of the given concept.
     pub fn children_of(&self, id: ConceptId) -> Vec<&Concept> {
         self.concepts
             .iter()
@@ -104,10 +121,12 @@ impl Project {
             .collect()
     }
 
+    /// Return all root concepts (those with no parent).
     pub fn roots(&self) -> Vec<&Concept> {
         self.concepts.iter().filter(|c| c.parent.is_none()).collect()
     }
 
+    /// Add a new concept. Returns `Err` if the parent ID doesn't exist.
     pub fn add_concept(
         &mut self,
         name: String,
@@ -129,6 +148,7 @@ impl Project {
         Ok(id)
     }
 
+    /// Remove a concept. Returns `Err` if it has children or is referenced by tasks.
     pub fn remove_concept(&mut self, id: ConceptId) -> Result<()> {
         if self.get_concept(id).is_none() {
             return Err(ProjectError::ConceptNotFound(id));
@@ -153,6 +173,7 @@ impl Project {
         Ok(())
     }
 
+    /// Re-parent a concept. Returns `Err` if the move would create a cycle.
     pub fn move_concept(&mut self, id: ConceptId, new_parent: Option<ConceptId>) -> Result<()> {
         if self.get_concept(id).is_none() {
             return Err(ProjectError::ConceptNotFound(id));
@@ -183,14 +204,17 @@ impl Project {
 
     // --- Task operations ---
 
+    /// Look up a task by ID.
     pub fn get_task(&self, id: TaskId) -> Option<&Task> {
         self.tasks.iter().find(|t| t.id == id)
     }
 
+    /// Look up a task by ID (mutable).
     pub fn get_task_mut(&mut self, id: TaskId) -> Option<&mut Task> {
         self.tasks.iter_mut().find(|t| t.id == id)
     }
 
+    /// Add a new task with state `Todo` and no dependencies or concepts.
     pub fn add_task(
         &mut self,
         name: String,
@@ -212,6 +236,7 @@ impl Project {
         id
     }
 
+    /// Remove a task and clean up any references to it in other tasks' dependency lists.
     pub fn remove_task(&mut self, id: TaskId) -> Result<()> {
         if self.get_task(id).is_none() {
             return Err(ProjectError::TaskNotFound(id));
@@ -224,6 +249,7 @@ impl Project {
         Ok(())
     }
 
+    /// Add a dependency edge. Returns `Err` if it would create a cycle, is a duplicate, or is a self-loop.
     pub fn add_dependency(&mut self, task_id: TaskId, depends_on_id: TaskId) -> Result<()> {
         if task_id == depends_on_id {
             return Err(ProjectError::SelfDependency(task_id));
@@ -257,6 +283,7 @@ impl Project {
         Ok(())
     }
 
+    /// Remove a dependency edge. No-op if the edge didn't exist.
     pub fn remove_dependency(&mut self, task_id: TaskId, depends_on_id: TaskId) -> Result<()> {
         let task = self
             .get_task_mut(task_id)
@@ -265,6 +292,7 @@ impl Project {
         Ok(())
     }
 
+    /// Tag a task with a concept. Idempotent — linking twice is not an error.
     pub fn link_concept(&mut self, task_id: TaskId, concept_id: ConceptId) -> Result<()> {
         if self.get_concept(concept_id).is_none() {
             return Err(ProjectError::ConceptNotFound(concept_id));
@@ -278,6 +306,7 @@ impl Project {
         Ok(())
     }
 
+    /// Remove a concept tag from a task.
     pub fn unlink_concept(&mut self, task_id: TaskId, concept_id: ConceptId) -> Result<()> {
         let task = self
             .get_task_mut(task_id)
@@ -286,6 +315,7 @@ impl Project {
         Ok(())
     }
 
+    /// Update a task's workflow state.
     pub fn set_task_state(&mut self, id: TaskId, state: TaskState) -> Result<()> {
         let task = self
             .get_task_mut(id)
@@ -294,6 +324,7 @@ impl Project {
         Ok(())
     }
 
+    /// Set or clear a task's due date.
     pub fn set_task_due(&mut self, id: TaskId, due: Option<Zoned>) -> Result<()> {
         let task = self
             .get_task_mut(id)

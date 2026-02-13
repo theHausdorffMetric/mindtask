@@ -1,7 +1,13 @@
+//! JSON file storage for projects.
+//!
+//! Projects are stored as pretty-printed JSON. On load, ID counters are
+//! recomputed from the stored data so they don't need to be persisted.
+
 use std::path::Path;
 
 use crate::model::project::Project;
 
+/// Errors that can occur during project load or save.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
     #[error("project file not found: {0}")]
@@ -12,8 +18,10 @@ pub enum StoreError {
     ParseError(#[from] serde_json::Error),
 }
 
+/// Convenience alias for store results.
 pub type Result<T> = std::result::Result<T, StoreError>;
 
+/// Load a project from a JSON file, recomputing ID counters.
 pub fn load(path: &Path) -> Result<Project> {
     if !path.exists() {
         return Err(StoreError::NotFound(path.display().to_string()));
@@ -24,6 +32,7 @@ pub fn load(path: &Path) -> Result<Project> {
     Ok(project)
 }
 
+/// Save a project to a JSON file (pretty-printed).
 pub fn save(path: &Path, project: &Project) -> Result<()> {
     let json = serde_json::to_string_pretty(project)?;
     std::fs::write(path, json + "\n")?;

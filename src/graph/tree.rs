@@ -1,3 +1,5 @@
+//! Concept tree operations: ancestry checks and structural validation.
+
 use crate::model::id::ConceptId;
 use crate::model::project::Project;
 

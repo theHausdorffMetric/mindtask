@@ -1,3 +1,5 @@
+//! Task dependency DAG operations: cycle detection, topological sort, and validation.
+
 use std::collections::HashMap;
 
 use petgraph::graph::DiGraph;
