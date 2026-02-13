@@ -1,5 +1,6 @@
 mod concept;
 mod project;
+mod search;
 mod task;
 
 use std::path::{Path, PathBuf};
@@ -45,6 +46,14 @@ enum Command {
         task_id: TaskId,
         /// Concept ID (e.g. 1)
         concept_id: ConceptId,
+    },
+    /// Search concepts and tasks by name
+    Search {
+        /// Search query (case-insensitive substring match)
+        query: String,
+        /// Also search description fields
+        #[arg(long, short)]
+        description: bool,
     },
     /// Validate the project file
     Validate,
@@ -251,6 +260,12 @@ pub fn run() -> Result<()> {
             let mut proj = load_project(&path)?;
             task::unlink(&mut proj, task_id, concept_id)?;
             save_project(&path, &proj)
+        }
+        Command::Search { query, description } => {
+            let path = find_project_file()?;
+            let proj = load_project(&path)?;
+            search::search(&proj, &query, description);
+            Ok(())
         }
     }
 }
