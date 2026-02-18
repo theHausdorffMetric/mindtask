@@ -10,10 +10,13 @@ use crate::model::project::Project;
 /// Errors that can occur during project load or save.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
+    /// The project file does not exist at the given path.
     #[error("project file not found: {0}")]
     NotFound(String),
+    /// An I/O error occurred while reading or writing.
     #[error("failed to read project file: {0}")]
     ReadError(#[from] std::io::Error),
+    /// The file contents are not valid JSON or don't match the schema.
     #[error("failed to parse project file: {0}")]
     ParseError(#[from] serde_json::Error),
 }

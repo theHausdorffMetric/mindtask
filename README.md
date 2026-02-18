@@ -26,19 +26,54 @@ Concept Tree                Task DAG
       └── Components        task 3 concepts = [API, Database]
 ```
 
+## Installation
+
+```sh
+cargo install mindtask
+```
+
+## Usage
+
+```sh
+# Start a new project (optionally with a default timezone)
+mindtask init --timezone America/New_York
+
+# Build a concept tree
+mindtask concept add "Backend"
+mindtask concept add "API" --parent 1
+mindtask concept add "Database" --parent 1
+
+# Create tasks and link them to concepts
+mindtask task add "Design API"
+mindtask link 1 2            # link task 1 → concept 2 (API)
+mindtask task add "Implement API" --due 2025-03-15
+mindtask depend add 2 1      # task 2 depends on task 1
+
+# Track progress
+mindtask task state 1 done
+mindtask task ls
+
+# Search and validate
+mindtask search "API"
+mindtask validate
+```
+
+Data is stored in `.mindtask.json` in the current directory — human-readable, versionable with git.
+
 ## Data Model
 
 ```json
 {
+  "version": 1,
   "timezone": "America/New_York",
   "concepts": [
-    { "id": 1, "name": "Project" },
-    { "id": 2, "name": "Backend", "parent": 1 },
-    { "id": 3, "name": "API", "parent": 2 }
+    { "id": 1, "name": "Backend" },
+    { "id": 2, "name": "API", "parent": 1 },
+    { "id": 3, "name": "Database", "parent": 1 }
   ],
   "tasks": [
-    { "id": 1, "name": "Design API", "state": "done", "concepts": [3] },
-    { "id": 2, "name": "Implement API", "state": "todo", "due": "2025-03-15T14:00:00-04:00[America/New_York]", "depends_on": [1], "concepts": [3] }
+    { "id": 1, "name": "Design API", "state": "done", "concepts": [2] },
+    { "id": 2, "name": "Implement API", "state": "todo", "due": "2025-03-15T00:00:00-04:00[America/New_York]", "depends_on": [1], "concepts": [2] }
   ]
 }
 ```
@@ -74,9 +109,9 @@ Concept Tree                Task DAG
 
 ## Documentation
 
-- [Concept Document](docs/concept.md) — detailed design decisions and data model
-- [Research Report](docs/research.md) — analysis of existing tools and data structures
+- [Concept Document](https://git.sr.ht/~danprobst/mindtask/tree/master/item/docs/concept.md) — detailed design decisions and data model
+- [Research Report](https://git.sr.ht/~danprobst/mindtask/tree/master/item/docs/research.md) — analysis of existing tools and data structures
 
 ## License
 
-MIT
+GPL-3.0-only

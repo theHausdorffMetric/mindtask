@@ -35,8 +35,10 @@ impl fmt::Display for TaskId {
 /// Errors returned when parsing an ID from a string.
 #[derive(Debug, thiserror::Error)]
 pub enum IdParseError {
+    /// The string could not be parsed as a concept ID.
     #[error("invalid concept ID: expected a positive integer, got '{0}'")]
     InvalidConceptId(String),
+    /// The string could not be parsed as a task ID.
     #[error("invalid task ID: expected a positive integer, got '{0}'")]
     InvalidTaskId(String),
 }

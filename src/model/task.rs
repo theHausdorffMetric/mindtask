@@ -10,9 +10,12 @@ use super::id::{ConceptId, TaskId};
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskState {
+    /// Not yet started.
     #[default]
     Todo,
+    /// Currently being worked on.
     InProgress,
+    /// Finished.
     Done,
 }
 
@@ -45,13 +48,17 @@ impl std::str::FromStr for TaskState {
 /// A unit of work that can depend on other tasks and be tagged with concepts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
+    /// Unique identifier.
     pub id: TaskId,
+    /// Human-readable name.
     pub name: String,
+    /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// Estimated duration in arbitrary units (e.g. hours).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
+    /// Current workflow state.
     #[serde(default, alias = "status")]
     pub state: TaskState,
     /// Timezone-aware due date.

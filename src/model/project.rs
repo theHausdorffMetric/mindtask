@@ -13,23 +13,38 @@ use jiff::Zoned;
 /// Errors from project mutation operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ProjectError {
+    /// A concept ID was not found in the project.
     #[error("concept {0} not found")]
     ConceptNotFound(ConceptId),
+    /// A task ID was not found in the project.
     #[error("task {0} not found")]
     TaskNotFound(TaskId),
+    /// Attempted to remove a concept that still has children.
     #[error("cannot remove concept {0}: it has child concepts")]
     ConceptHasChildren(ConceptId),
+    /// Attempted to remove a concept that is still referenced by tasks.
     #[error("cannot remove concept {0}: tasks reference it: {1:?}")]
     ConceptReferencedByTasks(ConceptId, Vec<TaskId>),
+    /// Moving a concept would create a cycle in the tree.
     #[error("cannot move concept {id} under {new_parent}: would create a cycle")]
     ConceptCycleDetected {
+        /// The concept being moved.
         id: ConceptId,
+        /// The proposed new parent.
         new_parent: ConceptId,
     },
+    /// Adding a dependency would create a cycle in the task DAG.
     #[error("adding dependency {from} -> {to} would create a cycle")]
-    DependencyCycle { from: TaskId, to: TaskId },
+    DependencyCycle {
+        /// The task that would gain the dependency.
+        from: TaskId,
+        /// The proposed dependency target.
+        to: TaskId,
+    },
+    /// The dependency already exists.
     #[error("duplicate dependency: {0} already depends on {1}")]
     DuplicateDependency(TaskId, TaskId),
+    /// A task cannot depend on itself.
     #[error("a task cannot depend on itself: {0}")]
     SelfDependency(TaskId),
 }
@@ -43,14 +58,19 @@ pub type Result<T> = std::result::Result<T, ProjectError>;
 /// are recomputed from the stored data via [`recompute_next_ids`](Self::recompute_next_ids).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
+    /// Schema version number.
     pub version: u32,
     /// Default IANA timezone for due-date parsing (e.g. `"America/New_York"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timezone: Option<String>,
+    /// All concepts in the project.
     pub concepts: Vec<Concept>,
+    /// All tasks in the project.
     pub tasks: Vec<Task>,
+    /// Next available concept ID (not serialized).
     #[serde(skip)]
     pub next_concept_id: u64,
+    /// Next available task ID (not serialized).
     #[serde(skip)]
     pub next_task_id: u64,
 }

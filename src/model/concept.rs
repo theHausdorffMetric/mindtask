@@ -10,8 +10,11 @@ use super::id::ConceptId;
 /// A concept with no parent is a root node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Concept {
+    /// Unique identifier.
     pub id: ConceptId,
+    /// Human-readable name.
     pub name: String,
+    /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// Parent concept, or `None` for root concepts.

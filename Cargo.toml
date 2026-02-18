@@ -3,7 +3,13 @@ name = "mindtask"
 version = "0.1.0"
 edition = "2024"
 description = "A CLI tool combining mindmaps with task dependency graphs"
-license = "MIT"
+license = "GPL-3.0-only"
+authors = ["Dan Probst <dan@probst.dev>"]
+readme = "README.md"
+repository = "https://git.sr.ht/~danprobst/mindtask"
+keywords = ["cli", "mindmap", "task", "dag", "planning"]
+categories = ["command-line-utilities"]
+exclude = ["docs/", "STATUS.md"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
