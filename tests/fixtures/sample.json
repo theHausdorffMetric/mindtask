@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "timezone": "America/New_York",
+  "concepts": [
+    {
+      "id": 1,
+      "name": "Backend"
+    },
+    {
+      "id": 2,
+      "name": "API",
+      "parent": 1
+    },
+    {
+      "id": 3,
+      "name": "Database",
+      "parent": 1
+    },
+    {
+      "id": 4,
+      "name": "Frontend"
+    },
+    {
+      "id": 5,
+      "name": "Dashboard",
+      "parent": 4
+    }
+  ],
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Design API",
+      "duration": 2.0,
+      "state": "done",
+      "due": "2025-04-01T09:00:00-04:00[America/New_York]",
+      "concepts": [
+        2
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Build API",
+      "duration": 5.0,
+      "state": "in_progress",
+      "due": "2025-04-08T17:00:00-04:00[America/New_York]",
+      "depends_on": [
+        1
+      ],
+      "concepts": [
+        2
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Write migrations",
+      "duration": 1.0,
+      "state": "done",
+      "due": "2025-04-02T12:00:00-04:00[America/New_York]",
+      "concepts": [
+        3
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Build dashboard",
+      "duration": 3.0,
+      "state": "todo",
+      "due": "2025-04-10T17:00:00-04:00[America/New_York]",
+      "depends_on": [
+        2
+      ],
+      "concepts": [
+        5
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Code review",
+      "state": "todo",
+      "depends_on": [
+        2
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Deploy",
+      "state": "todo",
+      "depends_on": [
+        4,
+        5
+      ]
+    }
+  ]
+}
