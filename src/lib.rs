@@ -11,6 +11,7 @@
 //! - [`graph`] — Structural validation: cycle detection for the concept tree
 //!   and the task dependency DAG.
 //! - [`store`] — JSON file persistence (load/save).
+//! - [`export`] — Diagram generation (PlantUML, Mermaid stub) for visualization.
 
 pub mod export;
 pub mod graph;

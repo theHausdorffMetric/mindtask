@@ -1,8 +1,8 @@
 # mindtask — Status
 
-## Current Phase: Core complete — ready for visualization
+## Current Phase: Visualization via PlantUML export
 
-Phases 1–4 are implemented: data model, concept tree, task DAG, and CLI. Due dates with timezone support have been added. The tool is usable for creating and managing projects from the command line.
+Phases 1–5 are implemented: data model, concept tree, task DAG, CLI, and PlantUML diagram export. The tool is usable for creating, managing, and visualizing projects from the command line.
 
 ## What's Done
 
@@ -59,6 +59,19 @@ Phases 1–4 are implemented: data model, concept tree, task DAG, and CLI. Due d
 - [x] Due dates displayed in project timezone in `task show`, `task ls`, `search`
 - [x] Flexible input parsing: full RFC 9557, datetime, or date-only (falls back to project tz)
 
+### Phase 4.7: Search
+- [x] `mindtask search <query>` — case-insensitive substring match across concepts and tasks
+- [x] `--description` flag to also search description fields
+
+### Phase 5: Diagram Export
+- [x] `mindtask export plantuml tree` — concept tree as PlantUML mindmap
+- [x] `mindtask export plantuml dag` — task DAG as PlantUML component diagram (colored by state)
+- [x] `mindtask export plantuml gantt` — tasks with due dates as PlantUML Gantt chart
+- [x] `mindtask export plantuml wbs` — concept tree with tasks as leaves (work breakdown structure)
+- [x] Optional root ID for tree and dag (render subtree/subgraph)
+- [x] Mermaid format stubbed for future implementation
+- [x] Test fixture generator (`tests/fixtures/generate.sh`) and justfile for rendering
+
 ## Architecture
 
 ```
@@ -68,6 +81,7 @@ src/
   model/              # Concept, Task, Project, ID newtypes
   store/              # JSON persistence
   graph/              # tree validation, DAG cycle detection (petgraph)
+  export/             # diagram generation (PlantUML, Mermaid stub)
   cli/                # clap definitions and command handlers
 ```
 
@@ -85,21 +99,15 @@ src/
 
 ## Next Steps
 
-### Phase 5: Visualization
-- [ ] Tree view for concepts (box-drawing characters)
-- [ ] DAG view for tasks (topological order with dependency indicators)
-- [ ] Combined view: concept tree with associated tasks
-
 ### Phase 6: Scheduling
 - [ ] Forward-pass scheduling (earliest start/finish)
 - [ ] Critical path computation
-- [ ] Gantt-style text output
 
 ### Phase 7: Polish
-- [ ] Colored output
+- [ ] Mermaid diagram export
+- [ ] Colored terminal output
 - [ ] Shell completions
 - [ ] Edit commands (rename concepts/tasks, update descriptions)
-- [ ] Error message audit
 
 ### Phase 8: TUI
 - [ ] Interactive terminal interface with `ratatui`
