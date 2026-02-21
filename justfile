@@ -40,6 +40,16 @@ render: build
 # Regenerate fixture then render all diagrams
 create-and-render: create-fixture render
 
+# Convert all .puml files to SVG via podman (requires podman)
+render-svg: render
+    #!/usr/bin/env bash
+    set -euo pipefail
+    CONVERT="{{ justfile_directory() }}/tests/fixtures/plantuml-convert.sh"
+    cd {{ out_dir }}
+    for f in *.puml; do
+        "$CONVERT" "$f"
+    done
+
 # Remove generated output files
 clean-output:
     rm -rf {{ out_dir }}

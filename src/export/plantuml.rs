@@ -141,6 +141,15 @@ pub fn gantt(project: &Project) -> String {
 
     let tasks_with_due: Vec<&Task> = project.tasks.iter().filter(|t| t.due.is_some()).collect();
 
+    // PlantUML requires a project start date before absolute dates work.
+    if let Some(earliest) = tasks_with_due.iter().filter_map(|t| {
+        let due = t.due.as_ref().unwrap();
+        let days = t.duration.unwrap_or(1.0).ceil().max(1.0) as i64;
+        due.checked_sub(jiff::Span::new().days(days)).ok()
+    }).min_by_key(|z| z.timestamp()) {
+        writeln!(out, "Project starts {}", earliest.date()).unwrap();
+    }
+
     for task in &tasks_with_due {
         let due = task.due.as_ref().unwrap();
         let duration_days = task.duration.unwrap_or(1.0).ceil().max(1.0) as i64;
@@ -149,10 +158,10 @@ pub fn gantt(project: &Project) -> String {
 
         writeln!(
             out,
-            "[{}] starts {} and lasts {} days",
+            "[{}] starts {} and ends {}",
             task.name,
             start.date(),
-            duration_days,
+            due.date(),
         )
         .unwrap();
 
@@ -377,7 +386,7 @@ mod tests {
         let output = gantt(&p);
         assert!(output.starts_with("@startgantt\n"));
         assert!(output.ends_with("@endgantt\n"));
-        assert!(output.contains("[Deploy] starts 2025-03-13 and lasts 2 days"));
+        assert!(output.contains("[Deploy] starts 2025-03-13 and ends 2025-03-15"));
     }
 
     #[test]
@@ -386,7 +395,7 @@ mod tests {
         let due = crate::model::task::parse_due("2025-03-15", "UTC").unwrap();
         p.add_task("Quick task".into(), None, None, Some(due));
         let output = gantt(&p);
-        assert!(output.contains("lasts 1 days"));
+        assert!(output.contains("and ends 2025-03-15"));
     }
 
     #[test]
