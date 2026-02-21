@@ -12,6 +12,7 @@
 //!   and the task dependency DAG.
 //! - [`store`] — JSON file persistence (load/save).
 
+pub mod export;
 pub mod graph;
 pub mod model;
 pub mod store;
