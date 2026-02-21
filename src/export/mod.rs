@@ -103,10 +103,10 @@ fn parse_concept_root(
         .map(|s| s.parse::<ConceptId>())
         .transpose()
         .map_err(|e| e.to_string())?;
-    if let Some(id) = root_id {
-        if project.get_concept(id).is_none() {
-            return Err(format!("concept {id} not found"));
-        }
+    if let Some(id) = root_id
+        && project.get_concept(id).is_none()
+    {
+        return Err(format!("concept {id} not found"));
     }
     Ok(root_id)
 }
@@ -116,10 +116,10 @@ fn parse_task_root(project: &Project, root: Option<&str>) -> Result<Option<TaskI
         .map(|s| s.parse::<TaskId>())
         .transpose()
         .map_err(|e| e.to_string())?;
-    if let Some(id) = root_id {
-        if project.get_task(id).is_none() {
-            return Err(format!("task {id} not found"));
-        }
+    if let Some(id) = root_id
+        && project.get_task(id).is_none()
+    {
+        return Err(format!("task {id} not found"));
     }
     Ok(root_id)
 }

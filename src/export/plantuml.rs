@@ -101,7 +101,7 @@ pub fn dag(project: &Project, root_id: Option<TaskId>) -> String {
 }
 
 /// Collect a task and all tasks that transitively depend on it.
-fn collect_downstream<'a>(project: &'a Project, root_id: TaskId) -> Vec<&'a Task> {
+fn collect_downstream(project: &Project, root_id: TaskId) -> Vec<&Task> {
     // Build reverse adjacency: task -> tasks that depend on it
     let mut dependents: HashMap<TaskId, Vec<TaskId>> = HashMap::new();
     for task in &project.tasks {

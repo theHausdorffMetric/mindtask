@@ -32,10 +32,10 @@ Concept Tree                Task DAG
 cargo install mindtask
 ```
 
-## Usage
+## Quick Start
 
 ```sh
-# Start a new project (optionally with a default timezone)
+# Initialize a new project (optionally with a default timezone)
 mindtask init --timezone America/New_York
 
 # Build a concept tree
@@ -44,21 +44,121 @@ mindtask concept add "API" --parent 1
 mindtask concept add "Database" --parent 1
 
 # Create tasks and link them to concepts
-mindtask task add "Design API"
+mindtask task add "Design API" --duration 2 --due 2025-03-15
 mindtask link 1 2            # link task 1 → concept 2 (API)
-mindtask task add "Implement API" --due 2025-03-15
+mindtask task add "Implement API" --due 2025-03-20
 mindtask depend add 2 1      # task 2 depends on task 1
 
 # Track progress
 mindtask task state 1 done
 mindtask task ls
-
-# Search and validate
-mindtask search "API"
-mindtask validate
 ```
 
-Data is stored in `.mindtask.json` in the current directory — human-readable, versionable with git.
+Data is stored in `.mindtask.json` in the current directory — human-readable, versionable with git. The CLI walks up parent directories to find the project file, so you can run commands from subdirectories.
+
+## CLI Reference
+
+### Project
+
+```sh
+mindtask init [--timezone <IANA_TZ>]    # Create a new .mindtask.json
+mindtask validate                       # Check tree + DAG integrity
+mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
+mindtask config timezone --show         # Show the current timezone
+```
+
+### Concepts
+
+Concepts form a tree (each concept has at most one parent).
+
+```sh
+mindtask concept add <NAME> [--parent <ID>] [--description <TEXT>]
+mindtask concept rm <ID>
+mindtask concept mv <ID> --parent <ID|root>
+mindtask concept ls
+mindtask concept show <ID>
+```
+
+Removing a concept fails if it has children or is referenced by tasks — unlink or remove dependents first.
+
+### Tasks
+
+Tasks form a dependency DAG. Each task has a workflow state (`todo`, `in_progress`, `done`).
+
+```sh
+mindtask task add <NAME> [--description <TEXT>] [--duration <DAYS>] [--due <DATE>]
+mindtask task rm <ID>
+mindtask task ls
+mindtask task show <ID>
+mindtask task state <ID> <todo|in_progress|done>
+mindtask task due <ID> <DATE>
+mindtask task due <ID> --clear
+```
+
+Due dates accept multiple formats:
+- Date only: `2025-03-15` (midnight in project timezone)
+- Datetime: `2025-03-15T14:00` (uses project timezone)
+- Full RFC 9557: `2025-03-15T14:00:00-04:00[America/New_York]`
+
+### Dependencies
+
+```sh
+mindtask depend add <TASK_ID> <DEPENDS_ON_ID>
+mindtask depend rm <TASK_ID> <DEPENDS_ON_ID>
+```
+
+Adding a dependency that would create a cycle is rejected. Removing a task automatically cleans up references from other tasks' dependency lists.
+
+### Linking Tasks to Concepts
+
+```sh
+mindtask link <TASK_ID> <CONCEPT_ID>
+mindtask unlink <TASK_ID> <CONCEPT_ID>
+```
+
+Links are many-to-many: a task can reference multiple concepts, and a concept can be referenced by multiple tasks.
+
+### Search
+
+```sh
+mindtask search <QUERY>                 # Search by name (case-insensitive)
+mindtask search <QUERY> --description   # Also search description fields
+```
+
+### Export
+
+Generate diagrams for external renderers. Supported formats: `plantuml`, `mermaid` (stubbed).
+
+```sh
+mindtask export <FORMAT> <DIAGRAM> [ROOT_ID]
+```
+
+Diagram types:
+
+| Diagram | Description | Root ID type |
+|---------|-------------|--------------|
+| `tree`  | Concept tree as a mindmap | Concept ID (renders subtree) |
+| `dag`   | Task dependency graph | Task ID (renders downstream) |
+| `gantt` | Gantt chart from tasks with due dates | — |
+| `wbs`   | Work breakdown structure (concepts + tasks) | — |
+
+Examples:
+
+```sh
+mindtask export plantuml tree           # Full concept tree
+mindtask export plantuml tree 1         # Subtree rooted at concept 1
+mindtask export plantuml dag            # Full task DAG
+mindtask export plantuml dag 1          # Task 1 and its downstream dependents
+mindtask export plantuml gantt          # Gantt chart (tasks with due dates)
+mindtask export plantuml wbs            # Work breakdown structure
+```
+
+Output is written to stdout. Pipe to a file and render with PlantUML:
+
+```sh
+mindtask export plantuml dag > dag.puml
+java -jar plantuml.jar -tsvg dag.puml
+```
 
 ## Data Model
 
@@ -73,10 +173,20 @@ Data is stored in `.mindtask.json` in the current directory — human-readable, 
   ],
   "tasks": [
     { "id": 1, "name": "Design API", "state": "done", "concepts": [2] },
-    { "id": 2, "name": "Implement API", "state": "todo", "due": "2025-03-15T00:00:00-04:00[America/New_York]", "depends_on": [1], "concepts": [2] }
+    {
+      "id": 2,
+      "name": "Implement API",
+      "state": "todo",
+      "duration": 5.0,
+      "due": "2025-03-15T00:00:00-04:00[America/New_York]",
+      "depends_on": [1],
+      "concepts": [2]
+    }
   ]
 }
 ```
+
+Optional fields (`description`, `duration`, `due`, `depends_on`, `concepts`, `parent`) are omitted from the JSON when empty or unset.
 
 ## Key Design Decisions
 
@@ -87,31 +197,16 @@ Data is stored in `.mindtask.json` in the current directory — human-readable, 
 | Linking | Tasks → Concepts | Keeps the concept tree clean and independent. |
 | Storage | Single JSON file | Human-readable, versionable with git, no database needed. |
 | IDs | Auto-increment integers | Simple to type, context distinguishes concepts from tasks. |
+| Timezones | IANA via `jiff` | RFC 9557 format preserves timezone identity across serialization. |
 
-## Features
+## Library
 
-- Add/remove/move concepts in the tree
-- Add/remove tasks with dependency validation (cycle detection)
-- Link tasks to concepts (many-to-many)
-- Task state tracking (todo / in_progress / done)
-- Due dates with timezone support (RFC 9557 / IANA timezones via `jiff`)
-- Project-level default timezone
-- Project validation (tree integrity + DAG acyclicity + reference checks)
-- Search concepts and tasks by name or description
-- Export diagrams as PlantUML (tree, DAG, Gantt, WBS)
-- JSON persistence (`.mindtask.json`, human-readable)
-- Full CLI with project file discovery
+mindtask is also usable as a Rust library (`use mindtask::...`):
 
-### Planned
-
-- Mermaid diagram export
-- Critical path analysis for tasks with durations
-- Interactive TUI
-
-## Documentation
-
-- [Concept Document](https://git.sr.ht/~danprobst/mindtask/tree/master/item/docs/concept.md) — detailed design decisions and data model
-- [Research Report](https://git.sr.ht/~danprobst/mindtask/tree/master/item/docs/research.md) — analysis of existing tools and data structures
+- `mindtask::model` — `Project`, `Concept`, `Task`, typed IDs (`ConceptId`, `TaskId`)
+- `mindtask::graph` — Tree validation, DAG cycle detection, topological sort, project validation
+- `mindtask::store` — JSON persistence (load/save)
+- `mindtask::export` — Diagram generation (PlantUML, Mermaid stub)
 
 ## License
 
