@@ -60,6 +60,15 @@ enum Command {
         #[arg(long, short)]
         description: bool,
     },
+    /// Export project data as a diagram
+    Export {
+        /// Output format (plantuml, mermaid)
+        format: mindtask::export::Format,
+        /// Diagram type (tree, dag, gantt, wbs)
+        diagram: mindtask::export::DiagramKind,
+        /// Optional root ID (concept ID for tree/wbs, task ID for dag)
+        root: Option<String>,
+    },
     /// Validate the project file
     Validate,
     /// Manage project configuration
@@ -302,6 +311,18 @@ pub fn run() -> Result<()> {
             let path = find_project_file()?;
             let proj = load_project(&path)?;
             search::search(&proj, &query, description);
+            Ok(())
+        }
+        Command::Export {
+            format,
+            diagram,
+            root,
+        } => {
+            let path = find_project_file()?;
+            let proj = load_project(&path)?;
+            let output = mindtask::export::render(&proj, format, diagram, root.as_deref())
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+            print!("{output}");
             Ok(())
         }
         Command::Config(cmd) => {

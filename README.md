@@ -97,14 +97,15 @@ Data is stored in `.mindtask.json` in the current directory — human-readable, 
 - Due dates with timezone support (RFC 9557 / IANA timezones via `jiff`)
 - Project-level default timezone
 - Project validation (tree integrity + DAG acyclicity + reference checks)
+- Search concepts and tasks by name or description
+- Export diagrams as PlantUML (tree, DAG, Gantt, WBS)
 - JSON persistence (`.mindtask.json`, human-readable)
 - Full CLI with project file discovery
 
 ### Planned
 
-- Tree and DAG visualization in the terminal
+- Mermaid diagram export
 - Critical path analysis for tasks with durations
-- Gantt-style timeline output
 - Interactive TUI
 
 ## Documentation
