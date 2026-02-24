@@ -1,5 +1,7 @@
 use anyhow::{Context, Result};
+use termtree::Tree;
 
+use mindtask::model::concept::Concept;
 use mindtask::model::id::ConceptId;
 use mindtask::model::project::Project;
 
@@ -107,4 +109,34 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub fn tree(project: &Project, root_id: Option<ConceptId>) -> Result<()> {
+    if project.concepts.is_empty() {
+        println!("No concepts.");
+        return Ok(());
+    }
+
+    let trees: Vec<Tree<String>> = match root_id {
+        Some(id) => {
+            let concept = project
+                .get_concept(id)
+                .ok_or_else(|| anyhow::anyhow!("concept {} not found", id))?;
+            vec![build_tree(project, concept)]
+        }
+        None => project.roots().into_iter().map(|c| build_tree(project, c)).collect(),
+    };
+
+    for t in &trees {
+        print!("{t}");
+    }
+    Ok(())
+}
+
+fn build_tree(project: &Project, concept: &Concept) -> Tree<String> {
+    let mut node = Tree::new(format!("{} [{}]", concept.name, concept.id));
+    for child in project.children_of(concept.id) {
+        node.push(build_tree(project, child));
+    }
+    node
 }

@@ -15,7 +15,7 @@ use mindtask::model::task::TaskState;
 const PROJECT_FILE: &str = ".mindtask.json";
 
 #[derive(Parser)]
-#[command(name = "mindtask", about = "Combine mindmaps with task dependency graphs")]
+#[command(name = "mindtask", about = "Combine mindmaps with task dependency graphs", version)]
 pub struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -104,6 +104,11 @@ enum ConceptCommand {
     },
     /// List all concepts
     Ls,
+    /// Display the concept tree
+    Tree {
+        /// Root concept ID to display a subtree (e.g. 1)
+        id: Option<ConceptId>,
+    },
     /// Show details of a concept
     Show {
         /// Concept ID (e.g. 1)
@@ -239,6 +244,10 @@ pub fn run() -> Result<()> {
                 ConceptCommand::Mv { id, parent } => concept::mv(&mut proj, id, &parent)?,
                 ConceptCommand::Ls => {
                     concept::list(&proj);
+                    return Ok(());
+                }
+                ConceptCommand::Tree { id } => {
+                    concept::tree(&proj, id)?;
                     return Ok(());
                 }
                 ConceptCommand::Show { id } => {
