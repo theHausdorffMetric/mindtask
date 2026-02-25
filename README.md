@@ -76,6 +76,7 @@ mindtask concept add <NAME> [--parent <ID>] [--description <TEXT>]
 mindtask concept rm <ID>
 mindtask concept mv <ID> --parent <ID|root>
 mindtask concept ls
+mindtask concept tree [<ID>]
 mindtask concept show <ID>
 ```
 
