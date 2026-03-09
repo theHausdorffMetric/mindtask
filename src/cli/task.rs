@@ -49,6 +49,41 @@ pub fn add(
     Ok(())
 }
 
+pub fn edit(
+    project: &mut Project,
+    id: TaskId,
+    name: Option<String>,
+    description: Option<String>,
+    clear_description: bool,
+    duration: Option<f64>,
+    clear_duration: bool,
+) -> Result<()> {
+    let desc = if clear_description {
+        Some(None)
+    } else {
+        description.map(Some)
+    };
+
+    let dur = if clear_duration {
+        Some(None)
+    } else {
+        duration.map(Some)
+    };
+
+    if name.is_none() && desc.is_none() && dur.is_none() {
+        anyhow::bail!(
+            "nothing to edit: provide --name, --description, --duration, \
+             --clear-description, and/or --clear-duration"
+        );
+    }
+
+    project
+        .edit_task(id, name, desc, dur)
+        .context("failed to edit task")?;
+    println!("Updated task {}", id);
+    Ok(())
+}
+
 pub fn remove(project: &mut Project, id: TaskId) -> Result<()> {
     let name = project
         .get_task(id)

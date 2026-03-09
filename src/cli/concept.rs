@@ -30,6 +30,30 @@ pub fn remove(project: &mut Project, id: ConceptId) -> Result<()> {
     Ok(())
 }
 
+pub fn edit(
+    project: &mut Project,
+    id: ConceptId,
+    name: Option<String>,
+    description: Option<String>,
+    clear_description: bool,
+) -> Result<()> {
+    let desc = if clear_description {
+        Some(None)
+    } else {
+        description.map(Some)
+    };
+
+    if name.is_none() && desc.is_none() {
+        anyhow::bail!("nothing to edit: provide --name and/or --description (or --clear-description)");
+    }
+
+    project
+        .edit_concept(id, name, desc)
+        .context("failed to edit concept")?;
+    println!("Updated concept {}", id);
+    Ok(())
+}
+
 pub fn mv(project: &mut Project, id: ConceptId, parent_str: &str) -> Result<()> {
     let new_parent = if parent_str == "root" {
         None
