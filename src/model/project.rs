@@ -193,6 +193,27 @@ impl Project {
         Ok(())
     }
 
+    /// Edit a concept's name and/or description.
+    pub fn edit_concept(
+        &mut self,
+        id: ConceptId,
+        name: Option<String>,
+        description: Option<Option<String>>,
+    ) -> Result<()> {
+        let concept = self
+            .concepts
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or(ProjectError::ConceptNotFound(id))?;
+        if let Some(n) = name {
+            concept.name = n;
+        }
+        if let Some(d) = description {
+            concept.description = d;
+        }
+        Ok(())
+    }
+
     /// Re-parent a concept. Returns `Err` if the move would create a cycle.
     pub fn move_concept(&mut self, id: ConceptId, new_parent: Option<ConceptId>) -> Result<()> {
         if self.get_concept(id).is_none() {
@@ -232,6 +253,31 @@ impl Project {
     /// Look up a task by ID (mutable).
     pub fn get_task_mut(&mut self, id: TaskId) -> Option<&mut Task> {
         self.tasks.iter_mut().find(|t| t.id == id)
+    }
+
+    /// Edit a task's name, description, and/or duration.
+    pub fn edit_task(
+        &mut self,
+        id: TaskId,
+        name: Option<String>,
+        description: Option<Option<String>>,
+        duration: Option<Option<f64>>,
+    ) -> Result<()> {
+        let task = self
+            .tasks
+            .iter_mut()
+            .find(|t| t.id == id)
+            .ok_or(ProjectError::TaskNotFound(id))?;
+        if let Some(n) = name {
+            task.name = n;
+        }
+        if let Some(d) = description {
+            task.description = d;
+        }
+        if let Some(d) = duration {
+            task.duration = d;
+        }
+        Ok(())
     }
 
     /// Add a new task with state `Todo` and no dependencies or concepts.
@@ -552,6 +598,63 @@ mod tests {
         // Unlink
         p.unlink_concept(t1, ConceptId(1)).unwrap();
         assert!(p.get_task(t1).unwrap().concepts.is_empty());
+    }
+
+    #[test]
+    fn edit_concept_name_and_description() {
+        let mut p = Project::new();
+        p.add_concept("Old".into(), None, None).unwrap();
+        p.edit_concept(ConceptId(1), Some("New".into()), Some(Some("desc".into())))
+            .unwrap();
+        let c = p.get_concept(ConceptId(1)).unwrap();
+        assert_eq!(c.name, "New");
+        assert_eq!(c.description.as_deref(), Some("desc"));
+    }
+
+    #[test]
+    fn edit_concept_clear_description() {
+        let mut p = Project::new();
+        p.add_concept("A".into(), None, Some("old desc".into())).unwrap();
+        p.edit_concept(ConceptId(1), None, Some(None)).unwrap();
+        assert!(p.get_concept(ConceptId(1)).unwrap().description.is_none());
+    }
+
+    #[test]
+    fn edit_concept_not_found() {
+        let mut p = Project::new();
+        let err = p.edit_concept(ConceptId(99), Some("X".into()), None).unwrap_err();
+        assert!(matches!(err, ProjectError::ConceptNotFound(_)));
+    }
+
+    #[test]
+    fn edit_task_name_and_description() {
+        let mut p = Project::new();
+        let id = p.add_task("Old".into(), None, Some(1.0), None);
+        p.edit_task(id, Some("New".into()), Some(Some("desc".into())), None)
+            .unwrap();
+        let t = p.get_task(id).unwrap();
+        assert_eq!(t.name, "New");
+        assert_eq!(t.description.as_deref(), Some("desc"));
+        assert_eq!(t.duration, Some(1.0)); // unchanged
+    }
+
+    #[test]
+    fn edit_task_clear_description_and_duration() {
+        let mut p = Project::new();
+        let id = p.add_task("T".into(), Some("desc".into()), Some(2.0), None);
+        p.edit_task(id, None, Some(None), Some(None)).unwrap();
+        let t = p.get_task(id).unwrap();
+        assert!(t.description.is_none());
+        assert!(t.duration.is_none());
+    }
+
+    #[test]
+    fn edit_task_not_found() {
+        let mut p = Project::new();
+        let err = p
+            .edit_task(TaskId(99), Some("X".into()), None, None)
+            .unwrap_err();
+        assert!(matches!(err, ProjectError::TaskNotFound(_)));
     }
 
     #[test]

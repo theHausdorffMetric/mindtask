@@ -94,6 +94,20 @@ enum ConceptCommand {
         /// Concept ID to remove (e.g. 1)
         id: ConceptId,
     },
+    /// Edit a concept's name or description
+    Edit {
+        /// Concept ID (e.g. 1)
+        id: ConceptId,
+        /// New name
+        #[arg(long)]
+        name: Option<String>,
+        /// New description (use --clear-description to remove)
+        #[arg(long)]
+        description: Option<String>,
+        /// Clear the description
+        #[arg(long)]
+        clear_description: bool,
+    },
     /// Move a concept to a new parent
     Mv {
         /// Concept ID to move (e.g. 1)
@@ -131,6 +145,26 @@ enum TaskCommand {
         /// Due date (e.g. 2025-03-15T14:00, 2025-03-15T14:00[America/New_York])
         #[arg(long)]
         due: Option<String>,
+    },
+    /// Edit a task's name, description, or duration
+    Edit {
+        /// Task ID (e.g. 1)
+        id: TaskId,
+        /// New name
+        #[arg(long)]
+        name: Option<String>,
+        /// New description (use --clear-description to remove)
+        #[arg(long)]
+        description: Option<String>,
+        /// Clear the description
+        #[arg(long)]
+        clear_description: bool,
+        /// New duration in days
+        #[arg(long)]
+        duration: Option<f64>,
+        /// Clear the duration
+        #[arg(long)]
+        clear_duration: bool,
     },
     /// Remove a task
     Rm {
@@ -241,6 +275,12 @@ pub fn run() -> Result<()> {
                     description,
                 } => concept::add(&mut proj, name, parent, description)?,
                 ConceptCommand::Rm { id } => concept::remove(&mut proj, id)?,
+                ConceptCommand::Edit {
+                    id,
+                    name,
+                    description,
+                    clear_description,
+                } => concept::edit(&mut proj, id, name, description, clear_description)?,
                 ConceptCommand::Mv { id, parent } => concept::mv(&mut proj, id, &parent)?,
                 ConceptCommand::Ls => {
                     concept::list(&proj);
@@ -267,6 +307,22 @@ pub fn run() -> Result<()> {
                     duration,
                     due,
                 } => task::add(&mut proj, name, description, duration, due)?,
+                TaskCommand::Edit {
+                    id,
+                    name,
+                    description,
+                    clear_description,
+                    duration,
+                    clear_duration,
+                } => task::edit(
+                    &mut proj,
+                    id,
+                    name,
+                    description,
+                    clear_description,
+                    duration,
+                    clear_duration,
+                )?,
                 TaskCommand::Rm { id } => task::remove(&mut proj, id)?,
                 TaskCommand::Ls => {
                     task::list(&proj);
