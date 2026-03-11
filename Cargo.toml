@@ -1,6 +1,6 @@
 [package]
 name = "mindtask"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2024"
 description = "A CLI tool combining mindmaps with task dependency graphs"
 license = "GPL-3.0-only"
@@ -9,7 +9,7 @@ readme = "README.md"
 repository = "https://git.sr.ht/~danprobst/mindtask"
 keywords = ["cli", "mindmap", "task", "dag", "planning"]
 categories = ["command-line-utilities"]
-exclude = ["docs/", "STATUS.md", "justfile", "tests/fixtures/"]
+exclude = ["docs/", "STATUS.md", "justfile", "tests/fixtures/", "claude_skill/"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

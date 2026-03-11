@@ -73,6 +73,7 @@ Concepts form a tree (each concept has at most one parent).
 
 ```sh
 mindtask concept add <NAME> [--parent <ID>] [--description <TEXT>]
+mindtask concept edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-description]
 mindtask concept rm <ID>
 mindtask concept mv <ID> --parent <ID|root>
 mindtask concept ls
@@ -88,6 +89,7 @@ Tasks form a dependency DAG. Each task has a workflow state (`todo`, `in_progres
 
 ```sh
 mindtask task add <NAME> [--description <TEXT>] [--duration <DAYS>] [--due <DATE>]
+mindtask task edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-description] [--duration <DAYS>] [--clear-duration]
 mindtask task rm <ID>
 mindtask task ls
 mindtask task show <ID>
