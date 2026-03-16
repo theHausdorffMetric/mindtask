@@ -128,6 +128,11 @@ enum ConceptCommand {
         /// Concept ID (e.g. 1)
         id: ConceptId,
     },
+    /// Report on a concept subtree and all related tasks
+    Report {
+        /// Root concept ID (e.g. 1)
+        id: ConceptId,
+    },
 }
 
 #[derive(Subcommand)]
@@ -292,6 +297,10 @@ pub fn run() -> Result<()> {
                 }
                 ConceptCommand::Show { id } => {
                     concept::show(&proj, id)?;
+                    return Ok(());
+                }
+                ConceptCommand::Report { id } => {
+                    concept::report(&proj, id)?;
                     return Ok(());
                 }
             }

@@ -32,6 +32,7 @@ mindtask concept edit <ID> [--name <NAME>] [--description <DESC>] [--clear-descr
 mindtask concept ls
 mindtask concept tree [ID]            # Full tree, or subtree from ID
 mindtask concept show <ID>
+mindtask concept report <ID>          # Subtree + linked tasks + upstream deps
 ```
 
 ### Tasks (DAG structure)
@@ -77,7 +78,7 @@ Case-insensitive substring match across concepts and tasks.
 mindtask export <FORMAT> <DIAGRAM> [ROOT]
 ```
 
-Formats: `plantuml`, `mermaid` (mermaid not yet implemented as of v0.1.3)
+Formats: `plantuml`, `mermaid` (mermaid not yet implemented)
 
 Diagram types and what they show:
 
@@ -111,3 +112,4 @@ Due dates accept these formats:
 - `mindtask export plantuml wbs` gives the richest view: concepts + tasks together.
 - Chain commands: add a task, set its dependency, link it, then export.
 - Use `mindtask search` to find IDs before editing or linking.
+- Use `mindtask concept report <ID>` to see all work needed for a concept area, including transitive dependencies from outside the subtree.

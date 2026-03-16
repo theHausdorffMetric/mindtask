@@ -1,8 +1,10 @@
+use std::collections::{HashSet, VecDeque};
+
 use anyhow::{Context, Result};
 use termtree::Tree;
 
 use mindtask::model::concept::Concept;
-use mindtask::model::id::ConceptId;
+use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
 
 pub fn add(
@@ -163,4 +165,137 @@ fn build_tree(project: &Project, concept: &Concept) -> Tree<String> {
         node.push(build_tree(project, child));
     }
     node
+}
+
+/// Collect all concept IDs in the subtree rooted at `root_id` (inclusive).
+fn collect_subtree_ids(project: &Project, root_id: ConceptId) -> HashSet<ConceptId> {
+    let mut ids = HashSet::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(root_id);
+    while let Some(id) = queue.pop_front() {
+        ids.insert(id);
+        for child in project.children_of(id) {
+            queue.push_back(child.id);
+        }
+    }
+    ids
+}
+
+/// Walk `depends_on` transitively to find all upstream prerequisites.
+fn collect_upstream_tasks(project: &Project, seed: &HashSet<TaskId>) -> HashSet<TaskId> {
+    let mut all = seed.clone();
+    let mut queue: VecDeque<TaskId> = seed.iter().copied().collect();
+    while let Some(tid) = queue.pop_front() {
+        if let Some(task) = project.get_task(tid) {
+            for &dep_id in &task.depends_on {
+                if all.insert(dep_id) {
+                    queue.push_back(dep_id);
+                }
+            }
+        }
+    }
+    all
+}
+
+/// Format a short due date for report columns.
+fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
+    let tz_name = project.timezone_or_utc();
+    let z = if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
+        due.with_time_zone(tz)
+    } else {
+        due.clone()
+    };
+    format!(
+        "{}-{:02}-{:02} {:02}:{:02}",
+        z.year(),
+        z.month(),
+        z.day(),
+        z.hour(),
+        z.minute()
+    )
+}
+
+pub fn report(project: &Project, id: ConceptId) -> Result<()> {
+    let root = project
+        .get_concept(id)
+        .ok_or_else(|| anyhow::anyhow!("concept {} not found", id))?;
+
+    // 1. Print concept subtree
+    println!("=== Concept Subtree ===");
+    let t = build_tree(project, root);
+    print!("{t}");
+
+    // 2. Collect all concept IDs in subtree
+    let subtree_ids = collect_subtree_ids(project, id);
+
+    // 3. Find tasks directly linked to any concept in the subtree
+    let direct_task_ids: HashSet<TaskId> = project
+        .tasks
+        .iter()
+        .filter(|t| t.concepts.iter().any(|c| subtree_ids.contains(c)))
+        .map(|t| t.id)
+        .collect();
+
+    if direct_task_ids.is_empty() {
+        println!("\nNo tasks linked to this concept subtree.");
+        return Ok(());
+    }
+
+    // 4. Walk transitive dependencies upstream
+    let all_task_ids = collect_upstream_tasks(project, &direct_task_ids);
+
+    // 5. Collect and sort tasks (direct first, then upstream-only)
+    let mut tasks: Vec<_> = project
+        .tasks
+        .iter()
+        .filter(|t| all_task_ids.contains(&t.id))
+        .collect();
+    // Preserve project ordering (which is insertion order)
+    tasks.sort_by_key(|t| {
+        // Direct tasks sort before upstream-only
+        if direct_task_ids.contains(&t.id) { 0 } else { 1 }
+    });
+
+    println!("\n=== Tasks ===");
+    println!(
+        "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
+        "ID", "NAME", "STATE", "DUE", "DEPENDS ON", ""
+    );
+    for task in &tasks {
+        let deps = if task.depends_on.is_empty() {
+            "-".to_string()
+        } else {
+            task.depends_on
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let due = task
+            .due
+            .as_ref()
+            .map(|d| format_due_short(d, project))
+            .unwrap_or_else(|| "-".to_string());
+        let marker = if direct_task_ids.contains(&task.id) {
+            ""
+        } else {
+            "(upstream dep)"
+        };
+        println!(
+            "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
+            task.id, task.name, task.state, due, deps, marker
+        );
+    }
+
+    let upstream_count = all_task_ids.len() - direct_task_ids.len();
+    if upstream_count > 0 {
+        println!(
+            "\n{} direct + {} upstream = {} total tasks",
+            direct_task_ids.len(),
+            upstream_count,
+            all_task_ids.len()
+        );
+    }
+
+    Ok(())
 }

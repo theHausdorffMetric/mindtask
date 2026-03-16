@@ -79,9 +79,12 @@ mindtask concept mv <ID> --parent <ID|root>
 mindtask concept ls
 mindtask concept tree [<ID>]
 mindtask concept show <ID>
+mindtask concept report <ID>
 ```
 
 Removing a concept fails if it has children or is referenced by tasks — unlink or remove dependents first.
+
+`concept report` shows the concept subtree, all tasks linked to concepts in that subtree, and all transitive upstream dependencies (tasks required by those tasks, even if linked to concepts outside the subtree). Upstream-only tasks are marked `(upstream dep)`.
 
 ### Tasks
 

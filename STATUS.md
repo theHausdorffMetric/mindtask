@@ -1,8 +1,8 @@
 # mindtask — Status
 
-## Current Phase: Visualization via PlantUML export
+## Current Phase: Concept Report
 
-Phases 1–5 are implemented: data model, concept tree, task DAG, CLI, and PlantUML diagram export. The tool is usable for creating, managing, and visualizing projects from the command line.
+Phases 1–5 are implemented plus concept report: data model, concept tree, task DAG, CLI, PlantUML diagram export, and concept subtree reporting with transitive dependency analysis.
 
 ## What's Done
 
@@ -63,6 +63,12 @@ Phases 1–5 are implemented: data model, concept tree, task DAG, CLI, and Plant
 - [x] `mindtask search <query>` — case-insensitive substring match across concepts and tasks
 - [x] `--description` flag to also search description fields
 
+### Phase 4.8: Concept Report
+- [x] `mindtask concept report <ID>` — show concept subtree + all related tasks
+- [x] Collects tasks linked to any concept in the subtree
+- [x] Walks transitive upstream dependencies (tasks required by linked tasks)
+- [x] Marks upstream-only tasks with `(upstream dep)` in output
+
 ### Phase 5: Diagram Export
 - [x] `mindtask export plantuml tree` — concept tree as PlantUML mindmap
 - [x] `mindtask export plantuml dag` — task DAG as PlantUML component diagram (colored by state)
@@ -107,7 +113,6 @@ src/
 - [ ] Mermaid diagram export
 - [ ] Colored terminal output
 - [ ] Shell completions
-- [ ] Edit commands (rename concepts/tasks, update descriptions)
 
 ### Phase 8: TUI
 - [ ] Interactive terminal interface with `ratatui`
