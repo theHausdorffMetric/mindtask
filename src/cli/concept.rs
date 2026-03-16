@@ -258,8 +258,8 @@ pub fn report(project: &Project, id: ConceptId) -> Result<()> {
 
     println!("\n=== Tasks ===");
     println!(
-        "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
-        "ID", "NAME", "STATE", "DUE", "DEPENDS ON", ""
+        "{:<6} {:<25} {:<14} {:<18} {:<15} ",
+        "ID", "NAME", "STATE", "DUE", "DEPENDS ON"
     );
     for task in &tasks {
         let deps = if task.depends_on.is_empty() {
