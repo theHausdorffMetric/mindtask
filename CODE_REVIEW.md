@@ -70,6 +70,12 @@ scripts can't distinguish that from real output. Until implemented, return an
 Added `validate_unique_ids` (`src/graph/dag.rs`), run first inside
 `validate_project` so downstream first-match lookups reason about clean data.
 
+### C7. `validate` does not check the project timezone — ✅ FIXED
+`validate_project` now verifies `project.timezone` (if set) names a real IANA
+zone via `jiff::tz::TimeZone::get`. Previously a hand-edited bad timezone passed
+`validate` and the load guard, only failing later when formatting a due date.
+`init`/`config timezone` already validated; this closes the hand-edited-file gap.
+
 `validate_project` → `validate_tree` + `validate_dag` + task→concept ref check.
 None of these check ID uniqueness (`src/graph/tree.rs:30`, `src/graph/dag.rs:54`).
 Two concepts (or tasks) sharing an ID pass validation; lookups silently resolve

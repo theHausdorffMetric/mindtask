@@ -99,7 +99,7 @@ pub fn validate_dag(tasks: &[Task]) -> std::result::Result<(), String> {
     Ok(())
 }
 
-/// Full project validation: unique IDs + tree + DAG + cross-references.
+/// Full project validation: unique IDs + tree + DAG + cross-references + timezone.
 pub fn validate_project(project: &crate::model::project::Project) -> std::result::Result<(), String> {
     validate_unique_ids(project)?;
     crate::graph::tree::validate_tree(project)?;
@@ -115,6 +115,15 @@ pub fn validate_project(project: &crate::model::project::Project) -> std::result
                 ));
             }
         }
+    }
+
+    // Validate the project timezone (if set) names a real IANA zone. Normal CLI
+    // usage validates on init/config, but a hand-edited file can store garbage
+    // that would otherwise only fail later when formatting a due date.
+    if let Some(tz) = &project.timezone
+        && jiff::tz::TimeZone::get(tz).is_err()
+    {
+        return Err(format!("invalid timezone '{tz}'"));
     }
 
     Ok(())
@@ -212,6 +221,22 @@ mod tests {
         p.add_concept("B".into(), None, None).unwrap();
         p.add_task("T".into(), None, None, None);
         assert!(validate_unique_ids(&p).is_ok());
+    }
+
+    #[test]
+    fn validate_detects_invalid_timezone() {
+        let mut p = Project::new();
+        p.timezone = Some("Bogus/Zone".into());
+        let err = validate_project(&p).unwrap_err();
+        assert!(err.contains("invalid timezone 'Bogus/Zone'"), "got: {err}");
+    }
+
+    #[test]
+    fn validate_accepts_valid_timezone_and_unset() {
+        let mut p = Project::new();
+        assert!(validate_project(&p).is_ok()); // None is fine
+        p.timezone = Some("Europe/Zurich".into());
+        assert!(validate_project(&p).is_ok());
     }
 
     #[test]

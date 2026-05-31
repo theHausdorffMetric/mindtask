@@ -14,6 +14,9 @@ use mindtask::model::task::TaskState;
 
 const PROJECT_FILE: &str = ".mindtask.json";
 
+/// Timezone assigned to a new project when `init` is run without `--timezone`.
+const DEFAULT_TIMEZONE: &str = "Europe/Zurich";
+
 #[derive(Parser)]
 #[command(name = "mindtask", about = "Combine mindmaps with task dependency graphs", version)]
 pub struct Cli {
@@ -26,8 +29,8 @@ enum Command {
     /// Initialize a new project in the current directory
     Init {
         /// Default timezone (IANA name, e.g. "America/New_York")
-        #[arg(long)]
-        timezone: Option<String>,
+        #[arg(long, default_value = DEFAULT_TIMEZONE)]
+        timezone: String,
     },
     /// Manage concepts in the concept tree
     #[command(subcommand)]
@@ -69,6 +72,8 @@ enum Command {
         /// Optional root ID (concept ID for tree/wbs, task ID for dag)
         root: Option<String>,
     },
+    /// Report the whole project: concept tree followed by the task list
+    Report,
     /// Validate the project file
     Validate,
     /// Manage project configuration
@@ -279,6 +284,14 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Command::Init { timezone } => project::init(timezone),
+        Command::Report => {
+            let path = find_project_file()?;
+            let proj = load_project(&path)?;
+            concept::tree(&proj, None)?;
+            println!();
+            task::list(&proj);
+            Ok(())
+        }
         Command::Validate => {
             let path = find_project_file()?;
             // Load without the validating wrapper so this command can produce its

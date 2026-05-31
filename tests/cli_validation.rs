@@ -135,6 +135,71 @@ fn task_add_with_unknown_concept_is_rejected_and_creates_nothing() {
 }
 
 #[test]
+fn report_shows_concept_tree_then_task_list() {
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [
+            { "id": 1, "name": "Backend" },
+            { "id": 2, "name": "API", "parent": 1 },
+            { "id": 3, "name": "Frontend" }
+          ],
+          "tasks": [
+            { "id": 1, "name": "Design API", "concepts": [2] },
+            { "id": 2, "name": "Build API", "depends_on": [1], "concepts": [2] },
+            { "id": 3, "name": "Build UI", "concepts": [3] }
+          ]
+        }"#,
+    );
+    let out = run(dir.path(), &["report"]);
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Concept tree section (termtree renders the hierarchy with IDs).
+    assert!(stdout.contains("Backend [1]"), "stdout: {stdout}");
+    assert!(stdout.contains("API [2]"), "stdout: {stdout}");
+    assert!(stdout.contains("Frontend [3]"), "stdout: {stdout}");
+
+    // Task list section follows, with the table header and all tasks.
+    assert!(stdout.contains("DEPENDS ON"), "stdout: {stdout}");
+    assert!(stdout.contains("Design API"), "stdout: {stdout}");
+    assert!(stdout.contains("Build UI"), "stdout: {stdout}");
+
+    // Tree must come before the task table.
+    let tree_pos = stdout.find("Backend [1]").unwrap();
+    let list_pos = stdout.find("DEPENDS ON").unwrap();
+    assert!(tree_pos < list_pos, "tree should precede task list:\n{stdout}");
+}
+
+#[test]
+fn report_on_empty_project_succeeds() {
+    let dir = project_dir(r#"{ "version": 1, "concepts": [], "tasks": [] }"#);
+    let out = run(dir.path(), &["report"]);
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("No concepts."), "stdout: {stdout}");
+    assert!(stdout.contains("No tasks."), "stdout: {stdout}");
+}
+
+#[test]
+fn invalid_timezone_is_rejected() {
+    let dir = project_dir(
+        r#"{ "version": 1, "timezone": "Bogus/Zone", "concepts": [], "tasks": [] }"#,
+    );
+    // validate reports it...
+    let out = run(dir.path(), &["validate"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid timezone 'Bogus/Zone'"), "stderr: {stderr}");
+
+    // ...and the load-time guard blocks operational commands too.
+    let out = run(dir.path(), &["task", "ls"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("invalid timezone 'Bogus/Zone'"), "stderr: {stderr}");
+}
+
+#[test]
 fn valid_project_loads_and_lists() {
     let dir = project_dir(
         r#"{

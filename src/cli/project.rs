@@ -6,7 +6,7 @@ use mindtask::store::json;
 
 use super::PROJECT_FILE;
 
-pub fn init(timezone: Option<String>) -> Result<()> {
+pub fn init(timezone: String) -> Result<()> {
     let path = std::env::current_dir()
         .context("cannot determine current directory")?
         .join(PROJECT_FILE);
@@ -15,20 +15,18 @@ pub fn init(timezone: Option<String>) -> Result<()> {
         anyhow::bail!("{} already exists in the current directory", PROJECT_FILE);
     }
 
-    if let Some(ref tz) = timezone {
-        jiff::tz::TimeZone::get(tz)
-            .with_context(|| format!("invalid timezone '{tz}'"))?;
-    }
+    jiff::tz::TimeZone::get(&timezone)
+        .with_context(|| format!("invalid timezone '{timezone}'"))?;
 
     let mut project = Project::new();
-    project.timezone = timezone.clone();
+    project.timezone = Some(timezone);
     json::save(&path, &project).context("failed to create project file")?;
 
-    if let Some(tz) = &project.timezone {
-        println!("Created {} (timezone: {})", PROJECT_FILE, tz);
-    } else {
-        println!("Created {}", PROJECT_FILE);
-    }
+    println!(
+        "Created {} (timezone: {})",
+        PROJECT_FILE,
+        project.timezone.as_deref().unwrap_or_default()
+    );
     Ok(())
 }
 
