@@ -1,0 +1,150 @@
+//! Integration tests for the load-time validation guard.
+//!
+//! These drive the real `mindtask` binary against hand-written (malformed)
+//! `.mindtask.json` files to confirm that operational commands refuse to run on
+//! invalid data, that `validate` reports the specific problem, and—critically—
+//! that a cyclic concept tree terminates instead of hanging.
+
+use std::path::Path;
+use std::process::{Command, Output};
+
+use tempfile::TempDir;
+
+const BIN: &str = env!("CARGO_BIN_EXE_mindtask");
+
+/// Write `contents` to `.mindtask.json` in a fresh temp dir and return the dir.
+fn project_dir(contents: &str) -> TempDir {
+    let dir = TempDir::new().unwrap();
+    std::fs::write(dir.path().join(".mindtask.json"), contents).unwrap();
+    dir
+}
+
+/// Run the binary with `args` in `dir`.
+fn run(dir: &Path, args: &[&str]) -> Output {
+    Command::new(BIN)
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("failed to spawn mindtask")
+}
+
+const DUP_CONCEPT: &str = r#"{
+  "version": 1,
+  "concepts": [
+    { "id": 1, "name": "A" },
+    { "id": 1, "name": "B" }
+  ],
+  "tasks": []
+}"#;
+
+const CYCLIC_TREE: &str = r#"{
+  "version": 1,
+  "concepts": [
+    { "id": 1, "name": "A", "parent": 2 },
+    { "id": 2, "name": "B", "parent": 1 }
+  ],
+  "tasks": []
+}"#;
+
+const DANGLING_DEP: &str = r#"{
+  "version": 1,
+  "concepts": [],
+  "tasks": [
+    { "id": 1, "name": "T", "depends_on": [99] }
+  ]
+}"#;
+
+#[test]
+fn operational_command_rejects_duplicate_concept_id() {
+    let dir = project_dir(DUP_CONCEPT);
+    let out = run(dir.path(), &["concept", "ls"]);
+    assert!(!out.status.success(), "expected failure on duplicate IDs");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("duplicate concept ID 1"), "stderr: {stderr}");
+}
+
+#[test]
+fn validate_reports_duplicate_concept_id() {
+    let dir = project_dir(DUP_CONCEPT);
+    let out = run(dir.path(), &["validate"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("duplicate concept ID 1"), "stderr: {stderr}");
+}
+
+#[test]
+fn cyclic_tree_terminates_and_is_rejected() {
+    // The key property: this must not hang. The test harness imposes its own
+    // timeout, but pre-guard this would loop forever in is_ancestor/build_tree.
+    let dir = project_dir(CYCLIC_TREE);
+    let out = run(dir.path(), &["concept", "tree"]);
+    assert!(!out.status.success(), "expected failure on cyclic tree");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("cycle"), "stderr: {stderr}");
+}
+
+#[test]
+fn dangling_dependency_is_rejected() {
+    let dir = project_dir(DANGLING_DEP);
+    let out = run(dir.path(), &["task", "ls"]);
+    assert!(!out.status.success(), "expected failure on dangling dep");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("non-existent task 99"), "stderr: {stderr}");
+}
+
+#[test]
+fn task_add_with_concept_links_at_creation() {
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [{ "id": 1, "name": "A" }, { "id": 2, "name": "B" }],
+          "tasks": []
+        }"#,
+    );
+    let out = run(
+        dir.path(),
+        &["task", "add", "Work", "--concept", "1", "--concept", "2"],
+    );
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+
+    // The new task should be linked to both concepts on disk.
+    let show = run(dir.path(), &["task", "show", "1"]);
+    let stdout = String::from_utf8_lossy(&show.stdout);
+    assert!(stdout.contains("1 (A)"), "stdout: {stdout}");
+    assert!(stdout.contains("2 (B)"), "stdout: {stdout}");
+}
+
+#[test]
+fn task_add_with_unknown_concept_is_rejected_and_creates_nothing() {
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [{ "id": 1, "name": "A" }],
+          "tasks": []
+        }"#,
+    );
+    let out = run(dir.path(), &["task", "add", "Work", "--concept", "99"]);
+    assert!(!out.status.success(), "expected failure on unknown concept");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("concept 99 not found"), "stderr: {stderr}");
+
+    // No task should have been persisted.
+    let list = run(dir.path(), &["task", "ls"]);
+    let stdout = String::from_utf8_lossy(&list.stdout);
+    assert!(stdout.contains("No tasks."), "stdout: {stdout}");
+}
+
+#[test]
+fn valid_project_loads_and_lists() {
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [{ "id": 1, "name": "A" }],
+          "tasks": [{ "id": 1, "name": "T", "concepts": [1] }]
+        }"#,
+    );
+    let out = run(dir.path(), &["validate"]);
+    assert!(out.status.success(), "valid project should pass validate");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("valid"), "stdout: {stdout}");
+}

@@ -5,9 +5,16 @@ use crate::model::project::Project;
 
 /// Check if `ancestor_id` is an ancestor of `descendant_id` in the concept tree.
 /// Walks up the parent chain from `descendant_id`.
+///
+/// Returns `false` if the chain contains a cycle (defensive: well-formed data
+/// has none, but this is callable on unvalidated input via `move_concept`).
 pub fn is_ancestor(project: &Project, ancestor_id: ConceptId, descendant_id: ConceptId) -> bool {
+    let mut visited = std::collections::HashSet::new();
     let mut current = descendant_id;
     loop {
+        if !visited.insert(current) {
+            return false; // cycle in parent chain; not a valid ancestry
+        }
         let concept = match project.get_concept(current) {
             Some(c) => c,
             None => return false,
@@ -84,6 +91,33 @@ mod tests {
         p.add_concept("B".into(), Some(ConceptId(1)), None)
             .unwrap();
         assert!(validate_tree(&p).is_ok());
+    }
+
+    #[test]
+    fn is_ancestor_terminates_on_cyclic_chain() {
+        // Parent cycle 1 -> 2 -> 1, with 3 hanging off the cycle (3's parent is 1).
+        let mut p = Project::new();
+        p.concepts.push(crate::model::concept::Concept {
+            id: ConceptId(1),
+            name: "A".into(),
+            description: None,
+            parent: Some(ConceptId(2)),
+        });
+        p.concepts.push(crate::model::concept::Concept {
+            id: ConceptId(2),
+            name: "B".into(),
+            description: None,
+            parent: Some(ConceptId(1)),
+        });
+        p.concepts.push(crate::model::concept::Concept {
+            id: ConceptId(3),
+            name: "C".into(),
+            description: None,
+            parent: Some(ConceptId(1)),
+        });
+        // Searching for an ID that is never reached must terminate (not hang)
+        // even though the walk from 3 enters the 1<->2 cycle.
+        assert!(!is_ancestor(&p, ConceptId(99), ConceptId(3)));
     }
 
     #[test]
