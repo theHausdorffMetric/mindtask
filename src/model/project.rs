@@ -44,9 +44,15 @@ pub enum ProjectError {
     /// The dependency already exists.
     #[error("duplicate dependency: {0} already depends on {1}")]
     DuplicateDependency(TaskId, TaskId),
+    /// Attempted to remove a dependency edge that does not exist.
+    #[error("dependency does not exist: {0} does not depend on {1}")]
+    DependencyNotFound(TaskId, TaskId),
     /// A task cannot depend on itself.
     #[error("a task cannot depend on itself: {0}")]
     SelfDependency(TaskId),
+    /// Attempted to unlink a concept that the task is not linked to.
+    #[error("task {0} is not linked to concept {1}")]
+    ConceptNotLinked(TaskId, ConceptId),
 }
 
 /// Convenience alias for results from project operations.
@@ -349,11 +355,14 @@ impl Project {
         Ok(())
     }
 
-    /// Remove a dependency edge. No-op if the edge didn't exist.
+    /// Remove a dependency edge. Returns `Err` if the edge does not exist.
     pub fn remove_dependency(&mut self, task_id: TaskId, depends_on_id: TaskId) -> Result<()> {
         let task = self
             .get_task_mut(task_id)
             .ok_or(ProjectError::TaskNotFound(task_id))?;
+        if !task.depends_on.contains(&depends_on_id) {
+            return Err(ProjectError::DependencyNotFound(task_id, depends_on_id));
+        }
         task.depends_on.retain(|&d| d != depends_on_id);
         Ok(())
     }
@@ -372,11 +381,15 @@ impl Project {
         Ok(())
     }
 
-    /// Remove a concept tag from a task.
+    /// Remove a concept tag from a task. Returns `Err` if the task is not
+    /// linked to the given concept.
     pub fn unlink_concept(&mut self, task_id: TaskId, concept_id: ConceptId) -> Result<()> {
         let task = self
             .get_task_mut(task_id)
             .ok_or(ProjectError::TaskNotFound(task_id))?;
+        if !task.concepts.contains(&concept_id) {
+            return Err(ProjectError::ConceptNotLinked(task_id, concept_id));
+        }
         task.concepts.retain(|&c| c != concept_id);
         Ok(())
     }
@@ -562,6 +575,33 @@ mod tests {
     }
 
     #[test]
+    fn remove_dependency_missing_edge_fails() {
+        let mut p = Project::new();
+        let t1 = p.add_task("A".into(), None, None, None);
+        let t2 = p.add_task("B".into(), None, None, None);
+        // No edge between them yet.
+        let err = p.remove_dependency(t2, t1).unwrap_err();
+        assert!(matches!(err, ProjectError::DependencyNotFound(_, _)));
+    }
+
+    #[test]
+    fn remove_dependency_task_not_found_fails() {
+        let mut p = Project::new();
+        let err = p.remove_dependency(TaskId(99), TaskId(1)).unwrap_err();
+        assert!(matches!(err, ProjectError::TaskNotFound(_)));
+    }
+
+    #[test]
+    fn remove_dependency_succeeds() {
+        let mut p = Project::new();
+        let t1 = p.add_task("A".into(), None, None, None);
+        let t2 = p.add_task("B".into(), None, None, None);
+        p.add_dependency(t2, t1).unwrap();
+        p.remove_dependency(t2, t1).unwrap();
+        assert!(p.get_task(t2).unwrap().depends_on.is_empty());
+    }
+
+    #[test]
     fn duplicate_dependency_fails() {
         let mut p = Project::new();
         let t1 = p.add_task("A".into(), None, None, None);
@@ -598,6 +638,23 @@ mod tests {
         // Unlink
         p.unlink_concept(t1, ConceptId(1)).unwrap();
         assert!(p.get_task(t1).unwrap().concepts.is_empty());
+    }
+
+    #[test]
+    fn unlink_concept_not_linked_fails() {
+        let mut p = Project::new();
+        p.add_concept("Topic".into(), None, None).unwrap();
+        let t1 = p.add_task("Work".into(), None, None, None);
+        // Never linked: unlinking should error rather than silently succeed.
+        let err = p.unlink_concept(t1, ConceptId(1)).unwrap_err();
+        assert!(matches!(err, ProjectError::ConceptNotLinked(_, _)));
+    }
+
+    #[test]
+    fn unlink_concept_task_not_found_fails() {
+        let mut p = Project::new();
+        let err = p.unlink_concept(TaskId(99), ConceptId(1)).unwrap_err();
+        assert!(matches!(err, ProjectError::TaskNotFound(_)));
     }
 
     #[test]

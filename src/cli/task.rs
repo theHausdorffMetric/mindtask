@@ -39,13 +39,39 @@ pub fn add(
     description: Option<String>,
     duration: Option<f64>,
     due: Option<String>,
+    concepts: Vec<ConceptId>,
 ) -> Result<()> {
     let due = due
         .map(|d| parse_due(&d, project.timezone_or_utc()))
         .transpose()
         .context("invalid due date")?;
+
+    // Validate all concepts exist before creating the task, so a bad ID doesn't
+    // leave behind a half-linked task.
+    for &cid in &concepts {
+        if project.get_concept(cid).is_none() {
+            anyhow::bail!("concept {cid} not found");
+        }
+    }
+
     let id = project.add_task(name.clone(), description, duration, due);
-    println!("Added task {} \"{}\"", id, name);
+    for cid in &concepts {
+        // Concepts validated above; link_concept is idempotent and re-checks.
+        project
+            .link_concept(id, *cid)
+            .context("failed to link concept")?;
+    }
+
+    if concepts.is_empty() {
+        println!("Added task {} \"{}\"", id, name);
+    } else {
+        let linked = concepts
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("Added task {} \"{}\" (linked to concept(s) {})", id, name, linked);
+    }
     Ok(())
 }
 

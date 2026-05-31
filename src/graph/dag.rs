@@ -48,6 +48,32 @@ pub fn topological_order(tasks: &[Task]) -> std::result::Result<Vec<TaskId>, Str
     }
 }
 
+/// Validate that all concept IDs and all task IDs are unique.
+///
+/// Normal CLI usage cannot produce duplicates (IDs are monotonically allocated),
+/// but a hand-edited or merged project file can. Duplicates are checked first
+/// because the rest of validation relies on first-match lookups that are
+/// ambiguous when IDs collide.
+pub fn validate_unique_ids(
+    project: &crate::model::project::Project,
+) -> std::result::Result<(), String> {
+    let mut seen_concepts = std::collections::HashSet::new();
+    for concept in &project.concepts {
+        if !seen_concepts.insert(concept.id) {
+            return Err(format!("duplicate concept ID {}", concept.id));
+        }
+    }
+
+    let mut seen_tasks = std::collections::HashSet::new();
+    for task in &project.tasks {
+        if !seen_tasks.insert(task.id) {
+            return Err(format!("duplicate task ID {}", task.id));
+        }
+    }
+
+    Ok(())
+}
+
 /// Validate the task DAG:
 /// - All depends_on references point to existing tasks
 /// - No cycles
@@ -73,8 +99,9 @@ pub fn validate_dag(tasks: &[Task]) -> std::result::Result<(), String> {
     Ok(())
 }
 
-/// Full project validation: tree + DAG + cross-references.
+/// Full project validation: unique IDs + tree + DAG + cross-references + timezone.
 pub fn validate_project(project: &crate::model::project::Project) -> std::result::Result<(), String> {
+    validate_unique_ids(project)?;
     crate::graph::tree::validate_tree(project)?;
     validate_dag(&project.tasks)?;
 
@@ -88,6 +115,15 @@ pub fn validate_project(project: &crate::model::project::Project) -> std::result
                 ));
             }
         }
+    }
+
+    // Validate the project timezone (if set) names a real IANA zone. Normal CLI
+    // usage validates on init/config, but a hand-edited file can store garbage
+    // that would otherwise only fail later when formatting a due date.
+    if let Some(tz) = &project.timezone
+        && jiff::tz::TimeZone::get(tz).is_err()
+    {
+        return Err(format!("invalid timezone '{tz}'"));
     }
 
     Ok(())
@@ -143,6 +179,64 @@ mod tests {
         // Manually add bad concept reference
         p.get_task_mut(t1).unwrap().concepts.push(ConceptId(99));
         assert!(validate_project(&p).is_err());
+    }
+
+    #[test]
+    fn validate_detects_duplicate_concept_id() {
+        let mut p = Project::new();
+        p.add_concept("A".into(), None, None).unwrap();
+        // Inject a second concept sharing the same ID (simulates a hand-edited file).
+        p.concepts.push(crate::model::concept::Concept {
+            id: ConceptId(1),
+            name: "Dup".into(),
+            description: None,
+            parent: None,
+        });
+        let err = validate_project(&p).unwrap_err();
+        assert!(err.contains("duplicate concept ID 1"), "got: {err}");
+    }
+
+    #[test]
+    fn validate_detects_duplicate_task_id() {
+        let mut p = Project::new();
+        p.add_task("A".into(), None, None, None);
+        p.tasks.push(crate::model::task::Task {
+            id: TaskId(1),
+            name: "Dup".into(),
+            description: None,
+            duration: None,
+            state: crate::model::task::TaskState::Todo,
+            due: None,
+            depends_on: vec![],
+            concepts: vec![],
+        });
+        let err = validate_project(&p).unwrap_err();
+        assert!(err.contains("duplicate task ID 1"), "got: {err}");
+    }
+
+    #[test]
+    fn validate_unique_ids_accepts_clean_project() {
+        let mut p = Project::new();
+        p.add_concept("A".into(), None, None).unwrap();
+        p.add_concept("B".into(), None, None).unwrap();
+        p.add_task("T".into(), None, None, None);
+        assert!(validate_unique_ids(&p).is_ok());
+    }
+
+    #[test]
+    fn validate_detects_invalid_timezone() {
+        let mut p = Project::new();
+        p.timezone = Some("Bogus/Zone".into());
+        let err = validate_project(&p).unwrap_err();
+        assert!(err.contains("invalid timezone 'Bogus/Zone'"), "got: {err}");
+    }
+
+    #[test]
+    fn validate_accepts_valid_timezone_and_unset() {
+        let mut p = Project::new();
+        assert!(validate_project(&p).is_ok()); // None is fine
+        p.timezone = Some("Europe/Zurich".into());
+        assert!(validate_project(&p).is_ok());
     }
 
     #[test]

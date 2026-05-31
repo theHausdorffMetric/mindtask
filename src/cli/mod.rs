@@ -14,6 +14,9 @@ use mindtask::model::task::TaskState;
 
 const PROJECT_FILE: &str = ".mindtask.json";
 
+/// Timezone assigned to a new project when `init` is run without `--timezone`.
+const DEFAULT_TIMEZONE: &str = "Europe/Zurich";
+
 #[derive(Parser)]
 #[command(name = "mindtask", about = "Combine mindmaps with task dependency graphs", version)]
 pub struct Cli {
@@ -26,8 +29,8 @@ enum Command {
     /// Initialize a new project in the current directory
     Init {
         /// Default timezone (IANA name, e.g. "America/New_York")
-        #[arg(long)]
-        timezone: Option<String>,
+        #[arg(long, default_value = DEFAULT_TIMEZONE)]
+        timezone: String,
     },
     /// Manage concepts in the concept tree
     #[command(subcommand)]
@@ -69,6 +72,8 @@ enum Command {
         /// Optional root ID (concept ID for tree/wbs, task ID for dag)
         root: Option<String>,
     },
+    /// Report the whole project: concept tree followed by the task list
+    Report,
     /// Validate the project file
     Validate,
     /// Manage project configuration
@@ -150,6 +155,9 @@ enum TaskCommand {
         /// Due date (e.g. 2025-03-15T14:00, 2025-03-15T14:00[America/New_York])
         #[arg(long)]
         due: Option<String>,
+        /// Concept ID to link the task to (repeatable, e.g. --concept 1 --concept 2)
+        #[arg(long = "concept")]
+        concepts: Vec<ConceptId>,
     },
     /// Edit a task's name, description, or duration
     Edit {
@@ -251,8 +259,19 @@ fn find_project_file() -> Result<PathBuf> {
 }
 
 fn load_project(path: &Path) -> Result<mindtask::model::project::Project> {
-    mindtask::store::json::load(path)
-        .with_context(|| format!("failed to load project from {}", path.display()))
+    let proj = mindtask::store::json::load(path)
+        .with_context(|| format!("failed to load project from {}", path.display()))?;
+    // Reject malformed on-disk files (duplicate IDs, dangling refs, cyclic tree)
+    // before any command operates on them. Some of these would otherwise cause
+    // incorrect results or hangs. `mindtask validate` reports the same errors.
+    mindtask::graph::dag::validate_project(&proj).map_err(|e| {
+        anyhow::anyhow!(
+            "{} is invalid: {e}\n\
+             Fix the file or run 'mindtask validate' for details.",
+            path.display()
+        )
+    })?;
+    Ok(proj)
 }
 
 fn save_project(path: &Path, project: &mindtask::model::project::Project) -> Result<()> {
@@ -265,9 +284,20 @@ pub fn run() -> Result<()> {
 
     match cli.command {
         Command::Init { timezone } => project::init(timezone),
-        Command::Validate => {
+        Command::Report => {
             let path = find_project_file()?;
             let proj = load_project(&path)?;
+            concept::tree(&proj, None)?;
+            println!();
+            task::list(&proj);
+            Ok(())
+        }
+        Command::Validate => {
+            let path = find_project_file()?;
+            // Load without the validating wrapper so this command can produce its
+            // own diagnostic instead of being blocked by load_project's check.
+            let proj = mindtask::store::json::load(&path)
+                .with_context(|| format!("failed to load project from {}", path.display()))?;
             project::validate(&proj)
         }
         Command::Concept(cmd) => {
@@ -315,7 +345,8 @@ pub fn run() -> Result<()> {
                     description,
                     duration,
                     due,
-                } => task::add(&mut proj, name, description, duration, due)?,
+                    concepts,
+                } => task::add(&mut proj, name, description, duration, due, concepts)?,
                 TaskCommand::Edit {
                     id,
                     name,
