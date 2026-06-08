@@ -78,5 +78,3 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   due dates with per-project timezone support, and JSON file storage.
 
 [0.3.1]: https://git.sr.ht/~danprobst/mindtask
-</content>
-</invoke>
