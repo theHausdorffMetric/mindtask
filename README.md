@@ -54,7 +54,7 @@ mindtask task state 1 done
 mindtask task ls
 ```
 
-Data is stored in `.mindtask.json` in the current directory — human-readable, versionable with git. The CLI walks up parent directories to find the project file, so you can run commands from subdirectories.
+Data is stored in `.mindtask.json` in the current directory — human-readable, versionable with git. The CLI walks up parent directories to find the project file, so you can run commands from subdirectories. Pass `-f`/`--file <PATH>` (a global flag on any command) to operate on a specific project file instead, bypassing the directory search.
 
 ## CLI Reference
 
@@ -65,7 +65,10 @@ mindtask init [--timezone <IANA_TZ>]    # Create a new .mindtask.json
 mindtask validate                       # Check tree + DAG integrity
 mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
+mindtask report [-d|--descriptions]     # Whole project: concept tree + task list
 ```
+
+Any command accepts the global `-f`/`--file <PATH>` flag to target a specific project file instead of searching from the current directory.
 
 ### Concepts
 
@@ -77,12 +80,14 @@ mindtask concept edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-descr
 mindtask concept rm <ID>
 mindtask concept mv <ID> --parent <ID|root>
 mindtask concept ls
-mindtask concept tree [<ID>]
+mindtask concept tree [<ID>] [-d|--descriptions]
 mindtask concept show <ID>
-mindtask concept report <ID>
+mindtask concept report <ID> [-d|--descriptions]
 ```
 
 Removing a concept fails if it has children or is referenced by tasks — unlink or remove dependents first.
+
+Pass `-d`/`--descriptions` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches.
 
 `concept report` shows the concept subtree, all tasks linked to concepts in that subtree, and all transitive upstream dependencies (tasks required by those tasks, even if linked to concepts outside the subtree). Upstream-only tasks are marked `(upstream dep)`.
 
