@@ -96,7 +96,7 @@ Pass `-d`/`--descriptions` to `concept tree`, `concept report`, or the top-level
 Tasks form a dependency DAG. Each task has a workflow state (`todo`, `in_progress`, `done`).
 
 ```sh
-mindtask task add <NAME> [--description <TEXT>] [--duration <DAYS>] [--due <DATE>]
+mindtask task add <NAME> [--description <TEXT>] [--duration <DAYS>] [--due <DATE>] [--concept <ID>]...
 mindtask task edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-description] [--duration <DAYS>] [--clear-duration]
 mindtask task rm <ID>
 mindtask task ls
@@ -127,7 +127,7 @@ mindtask link <TASK_ID> <CONCEPT_ID>
 mindtask unlink <TASK_ID> <CONCEPT_ID>
 ```
 
-Links are many-to-many: a task can reference multiple concepts, and a concept can be referenced by multiple tasks.
+Links are many-to-many: a task can reference multiple concepts, and a concept can be referenced by multiple tasks. You can also link at creation time with `task add --concept <ID>` (repeatable), avoiding a separate `link` step.
 
 ### Search
 

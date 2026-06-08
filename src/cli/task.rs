@@ -188,7 +188,7 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
                     .get_task(*d)
                     .map(|t| t.name.as_str())
                     .unwrap_or("???");
-                format!("{} ({})", d, name)
+                format!("{} {{{}}}", name, d)
             })
             .collect();
         println!("Depends on:  {}", dep_strs.join(", "));
@@ -203,7 +203,7 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
                     .get_concept(*c)
                     .map(|co| co.name.as_str())
                     .unwrap_or("???");
-                format!("{} ({})", c, name)
+                format!("{} {{{}}}", name, c)
             })
             .collect();
         println!("Concepts:    {}", concept_strs.join(", "));

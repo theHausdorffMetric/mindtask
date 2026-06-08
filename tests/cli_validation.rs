@@ -110,8 +110,8 @@ fn task_add_with_concept_links_at_creation() {
     // The new task should be linked to both concepts on disk.
     let show = run(dir.path(), &["task", "show", "1"]);
     let stdout = String::from_utf8_lossy(&show.stdout);
-    assert!(stdout.contains("1 (A)"), "stdout: {stdout}");
-    assert!(stdout.contains("2 (B)"), "stdout: {stdout}");
+    assert!(stdout.contains("A {1}"), "stdout: {stdout}");
+    assert!(stdout.contains("B {2}"), "stdout: {stdout}");
 }
 
 #[test]

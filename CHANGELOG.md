@@ -16,9 +16,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - Concept ids now render as `{id}` instead of `[id]` across `concept tree`,
-  `concept report`, `report`, `concept ls`, and `concept show`. In `ls` the
-  `PARENT` column and in `show` the parent/children/tasks references now read
-  as `Name {id}`.
+  `concept report`, and `report`. Inline references in `concept ls` (the
+  `PARENT` column), `concept show`, and `task show` (parent, children,
+  dependencies, and linked concepts/tasks) now read as `Name {id}`.
 - Refreshed dependency lockfile (`cargo update`).
 
 ## [0.3.0] - 2026-05-31
