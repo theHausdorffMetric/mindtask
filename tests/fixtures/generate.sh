@@ -20,11 +20,11 @@ cd "$WORKDIR"
 $MINDTASK init --timezone "America/New_York"
 
 # Concept tree
-$MINDTASK concept add "Backend"
-$MINDTASK concept add "API" --parent 1
-$MINDTASK concept add "Database" --parent 1
+$MINDTASK concept add "Backend" --description "Core server-side services"
+$MINDTASK concept add "API" --parent 1 --description "HTTP routing and request handlers"
+$MINDTASK concept add "Database" --parent 1 --description "Persistence and migrations"
 $MINDTASK concept add "Frontend"
-$MINDTASK concept add "Dashboard" --parent 4
+$MINDTASK concept add "Dashboard" --parent 4 --description "User-facing metrics dashboard"
 
 # Tasks
 $MINDTASK task add "Design API" --duration 2 --due "2025-04-01T09:00"

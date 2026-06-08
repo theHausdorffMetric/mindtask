@@ -86,10 +86,13 @@ pub fn list(project: &Project) {
 
     println!("{:<6} {:<20} PARENT", "ID", "NAME");
     for concept in &project.concepts {
-        let parent = concept
-            .parent
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| "-".to_string());
+        let parent = match concept.parent {
+            Some(pid) => {
+                let name = project.get_concept(pid).map(|c| c.name.as_str()).unwrap_or("???");
+                format!("{name} {{{pid}}}")
+            }
+            None => "-".to_string(),
+        };
         println!("{:<6} {:<20} {}", concept.id, concept.name, parent);
     }
 }
@@ -110,14 +113,14 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
                 .get_concept(pid)
                 .map(|c| c.name.as_str())
                 .unwrap_or("???");
-            println!("Parent:      {} ({})", pid, parent_name);
+            println!("Parent:      {} {{{}}}", parent_name, pid);
         }
         None => println!("Parent:      (root)"),
     }
 
     let children = project.children_of(id);
     if !children.is_empty() {
-        let child_strs: Vec<String> = children.iter().map(|c| format!("{} ({})", c.id, c.name)).collect();
+        let child_strs: Vec<String> = children.iter().map(|c| format!("{} {{{}}}", c.name, c.id)).collect();
         println!("Children:    {}", child_strs.join(", "));
     }
 
@@ -129,7 +132,7 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
     if !linked_tasks.is_empty() {
         let task_strs: Vec<String> = linked_tasks
             .iter()
-            .map(|t| format!("{} ({})", t.id, t.name))
+            .map(|t| format!("{} {{{}}}", t.name, t.id))
             .collect();
         println!("Tasks:       {}", task_strs.join(", "));
     }
@@ -137,7 +140,7 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
     Ok(())
 }
 
-pub fn tree(project: &Project, root_id: Option<ConceptId>) -> Result<()> {
+pub fn tree(project: &Project, root_id: Option<ConceptId>, show_desc: bool) -> Result<()> {
     if project.concepts.is_empty() {
         println!("No concepts.");
         return Ok(());
@@ -148,9 +151,13 @@ pub fn tree(project: &Project, root_id: Option<ConceptId>) -> Result<()> {
             let concept = project
                 .get_concept(id)
                 .ok_or_else(|| anyhow::anyhow!("concept {} not found", id))?;
-            vec![build_tree(project, concept)]
+            vec![build_tree(project, concept, show_desc)]
         }
-        None => project.roots().into_iter().map(|c| build_tree(project, c)).collect(),
+        None => project
+            .roots()
+            .into_iter()
+            .map(|c| build_tree(project, c, show_desc))
+            .collect(),
     };
 
     for t in &trees {
@@ -159,10 +166,17 @@ pub fn tree(project: &Project, root_id: Option<ConceptId>) -> Result<()> {
     Ok(())
 }
 
-fn build_tree(project: &Project, concept: &Concept) -> Tree<String> {
-    let mut node = Tree::new(format!("{} [{}]", concept.name, concept.id));
+fn build_tree(project: &Project, concept: &Concept, show_desc: bool) -> Tree<String> {
+    let mut node = match (show_desc, &concept.description) {
+        (true, Some(desc)) => {
+            // Render the description on the line(s) below the concept; termtree's
+            // multiline mode indents continuation lines to line up with the branch.
+            Tree::new(format!("{} {{{}}}\n[{}]", concept.name, concept.id, desc)).with_multiline(true)
+        }
+        _ => Tree::new(format!("{} {{{}}}", concept.name, concept.id)),
+    };
     for child in project.children_of(concept.id) {
-        node.push(build_tree(project, child));
+        node.push(build_tree(project, child, show_desc));
     }
     node
 }
@@ -215,14 +229,14 @@ fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
     )
 }
 
-pub fn report(project: &Project, id: ConceptId) -> Result<()> {
+pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
     let root = project
         .get_concept(id)
         .ok_or_else(|| anyhow::anyhow!("concept {} not found", id))?;
 
     // 1. Print concept subtree
     println!("=== Concept Subtree ===");
-    let t = build_tree(project, root);
+    let t = build_tree(project, root, show_desc);
     print!("{t}");
 
     // 2. Collect all concept IDs in subtree

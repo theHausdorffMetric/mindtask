@@ -20,6 +20,11 @@ const DEFAULT_TIMEZONE: &str = "Europe/Zurich";
 #[derive(Parser)]
 #[command(name = "mindtask", about = "Combine mindmaps with task dependency graphs", version)]
 pub struct Cli {
+    /// Path to the project file to operate on, bypassing the search for
+    /// `.mindtask.json` in the current directory and its parents
+    #[arg(short = 'f', long = "file", global = true, value_name = "PATH")]
+    file: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -73,7 +78,11 @@ enum Command {
         root: Option<String>,
     },
     /// Report the whole project: concept tree followed by the task list
-    Report,
+    Report {
+        /// Show concept descriptions below each node in the tree
+        #[arg(short = 'd', long = "descriptions")]
+        descriptions: bool,
+    },
     /// Validate the project file
     Validate,
     /// Manage project configuration
@@ -127,6 +136,9 @@ enum ConceptCommand {
     Tree {
         /// Root concept ID to display a subtree (e.g. 1)
         id: Option<ConceptId>,
+        /// Show concept descriptions below each node in the tree
+        #[arg(short = 'd', long = "descriptions")]
+        descriptions: bool,
     },
     /// Show details of a concept
     Show {
@@ -137,6 +149,9 @@ enum ConceptCommand {
     Report {
         /// Root concept ID (e.g. 1)
         id: ConceptId,
+        /// Show concept descriptions below each node in the tree
+        #[arg(short = 'd', long = "descriptions")]
+        descriptions: bool,
     },
 }
 
@@ -241,6 +256,22 @@ enum ConfigCommand {
 }
 
 /// Find the project file by walking up from the current directory.
+/// Resolve the project file to use: an explicit `--file` override if given
+/// (which must exist), otherwise the nearest `.mindtask.json` by walking up
+/// from the current directory.
+fn resolve_project_file(override_path: Option<&Path>) -> Result<PathBuf> {
+    match override_path {
+        Some(p) => {
+            if p.exists() {
+                Ok(p.to_path_buf())
+            } else {
+                anyhow::bail!("project file not found: {}", p.display())
+            }
+        }
+        None => find_project_file(),
+    }
+}
+
 fn find_project_file() -> Result<PathBuf> {
     let mut dir = std::env::current_dir().context("cannot determine current directory")?;
     loop {
@@ -280,20 +311,21 @@ fn save_project(path: &Path, project: &mindtask::model::project::Project) -> Res
 }
 
 pub fn run() -> Result<()> {
-    let cli = Cli::parse();
+    let Cli { file, command } = Cli::parse();
+    let file = file.as_deref();
 
-    match cli.command {
+    match command {
         Command::Init { timezone } => project::init(timezone),
-        Command::Report => {
-            let path = find_project_file()?;
+        Command::Report { descriptions } => {
+            let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
-            concept::tree(&proj, None)?;
+            concept::tree(&proj, None, descriptions)?;
             println!();
             task::list(&proj);
             Ok(())
         }
         Command::Validate => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             // Load without the validating wrapper so this command can produce its
             // own diagnostic instead of being blocked by load_project's check.
             let proj = mindtask::store::json::load(&path)
@@ -301,7 +333,7 @@ pub fn run() -> Result<()> {
             project::validate(&proj)
         }
         Command::Concept(cmd) => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let mut proj = load_project(&path)?;
             match cmd {
                 ConceptCommand::Add {
@@ -321,23 +353,23 @@ pub fn run() -> Result<()> {
                     concept::list(&proj);
                     return Ok(());
                 }
-                ConceptCommand::Tree { id } => {
-                    concept::tree(&proj, id)?;
+                ConceptCommand::Tree { id, descriptions } => {
+                    concept::tree(&proj, id, descriptions)?;
                     return Ok(());
                 }
                 ConceptCommand::Show { id } => {
                     concept::show(&proj, id)?;
                     return Ok(());
                 }
-                ConceptCommand::Report { id } => {
-                    concept::report(&proj, id)?;
+                ConceptCommand::Report { id, descriptions } => {
+                    concept::report(&proj, id, descriptions)?;
                     return Ok(());
                 }
             }
             save_project(&path, &proj)
         }
         Command::Task(cmd) => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let mut proj = load_project(&path)?;
             match cmd {
                 TaskCommand::Add {
@@ -380,7 +412,7 @@ pub fn run() -> Result<()> {
             save_project(&path, &proj)
         }
         Command::Depend(cmd) => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let mut proj = load_project(&path)?;
             match cmd {
                 DependCommand::Add {
@@ -398,7 +430,7 @@ pub fn run() -> Result<()> {
             task_id,
             concept_id,
         } => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let mut proj = load_project(&path)?;
             task::link(&mut proj, task_id, concept_id)?;
             save_project(&path, &proj)
@@ -407,13 +439,13 @@ pub fn run() -> Result<()> {
             task_id,
             concept_id,
         } => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let mut proj = load_project(&path)?;
             task::unlink(&mut proj, task_id, concept_id)?;
             save_project(&path, &proj)
         }
         Command::Search { query, description } => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
             search::search(&proj, &query, description);
             Ok(())
@@ -423,7 +455,7 @@ pub fn run() -> Result<()> {
             diagram,
             root,
         } => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
             let output = mindtask::export::render(&proj, format, diagram, root.as_deref())
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -431,7 +463,7 @@ pub fn run() -> Result<()> {
             Ok(())
         }
         Command::Config(cmd) => {
-            let path = find_project_file()?;
+            let path = resolve_project_file(file)?;
             let mut proj = load_project(&path)?;
             match cmd {
                 ConfigCommand::Timezone { timezone, show } => {

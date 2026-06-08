@@ -156,9 +156,9 @@ fn report_shows_concept_tree_then_task_list() {
     let stdout = String::from_utf8_lossy(&out.stdout);
 
     // Concept tree section (termtree renders the hierarchy with IDs).
-    assert!(stdout.contains("Backend [1]"), "stdout: {stdout}");
-    assert!(stdout.contains("API [2]"), "stdout: {stdout}");
-    assert!(stdout.contains("Frontend [3]"), "stdout: {stdout}");
+    assert!(stdout.contains("Backend {1}"), "stdout: {stdout}");
+    assert!(stdout.contains("API {2}"), "stdout: {stdout}");
+    assert!(stdout.contains("Frontend {3}"), "stdout: {stdout}");
 
     // Task list section follows, with the table header and all tasks.
     assert!(stdout.contains("DEPENDS ON"), "stdout: {stdout}");
@@ -166,9 +166,79 @@ fn report_shows_concept_tree_then_task_list() {
     assert!(stdout.contains("Build UI"), "stdout: {stdout}");
 
     // Tree must come before the task table.
-    let tree_pos = stdout.find("Backend [1]").unwrap();
+    let tree_pos = stdout.find("Backend {1}").unwrap();
     let list_pos = stdout.find("DEPENDS ON").unwrap();
     assert!(tree_pos < list_pos, "tree should precede task list:\n{stdout}");
+}
+
+#[test]
+fn concept_tree_descriptions_flag_shows_descriptions_indented() {
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [
+            { "id": 1, "name": "Backend", "description": "Core services" },
+            { "id": 2, "name": "API", "parent": 1, "description": "HTTP layer" },
+            { "id": 3, "name": "Database", "parent": 1 }
+          ],
+          "tasks": []
+        }"#,
+    );
+
+    // Default tree output omits descriptions entirely.
+    let plain = run(dir.path(), &["concept", "tree"]);
+    assert!(plain.status.success(), "stderr: {}", String::from_utf8_lossy(&plain.stderr));
+    let plain_out = String::from_utf8_lossy(&plain.stdout);
+    assert!(plain_out.contains("Backend {1}"), "stdout: {plain_out}");
+    assert!(!plain_out.contains("Core services"), "default tree leaked description: {plain_out}");
+
+    // With -d, the description rides on the line below its concept, indented to
+    // line up with the branch (termtree's multiline skip glyphs).
+    let desc = run(dir.path(), &["concept", "tree", "-d"]);
+    assert!(desc.status.success(), "stderr: {}", String::from_utf8_lossy(&desc.stderr));
+    let desc_out = String::from_utf8_lossy(&desc.stdout);
+    assert!(desc_out.contains("[Core services]"), "stdout: {desc_out}");
+    // API is a non-last child, so its description line is prefixed with the
+    // vertical-continuation glyph.
+    assert!(desc_out.contains("\u{2502}   [HTTP layer]"), "stdout: {desc_out}");
+    // A concept without a description gets no extra line.
+    assert!(!desc_out.contains("Database {3}\n["), "stdout: {desc_out}");
+}
+
+#[test]
+fn file_flag_selects_an_explicit_project_path() {
+    // The project lives under a name that the upward `.mindtask.json` search
+    // would never find; `--file` must still load it.
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("custom.json");
+    std::fs::write(
+        &path,
+        r#"{
+          "version": 1,
+          "concepts": [ { "id": 1, "name": "Solo" } ],
+          "tasks": []
+        }"#,
+    )
+    .unwrap();
+
+    // Run from an unrelated cwd so discovery can't accidentally succeed.
+    let other = TempDir::new().unwrap();
+    let out = Command::new(BIN)
+        .args(["--file", path.to_str().unwrap(), "concept", "ls"])
+        .current_dir(other.path())
+        .output()
+        .expect("failed to spawn mindtask");
+    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("Solo"), "stdout: {}", String::from_utf8_lossy(&out.stdout));
+
+    // A non-existent override path is a clean error, not a fallback search.
+    let missing = run(other.path(), &["--file", "/no/such/file.json", "concept", "ls"]);
+    assert!(!missing.status.success());
+    assert!(
+        String::from_utf8_lossy(&missing.stderr).contains("project file not found"),
+        "stderr: {}",
+        String::from_utf8_lossy(&missing.stderr)
+    );
 }
 
 #[test]

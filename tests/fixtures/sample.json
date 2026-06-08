@@ -4,16 +4,19 @@
   "concepts": [
     {
       "id": 1,
-      "name": "Backend"
+      "name": "Backend",
+      "description": "Core server-side services"
     },
     {
       "id": 2,
       "name": "API",
+      "description": "HTTP routing and request handlers",
       "parent": 1
     },
     {
       "id": 3,
       "name": "Database",
+      "description": "Persistence and migrations",
       "parent": 1
     },
     {
@@ -23,6 +26,7 @@
     {
       "id": 5,
       "name": "Dashboard",
+      "description": "User-facing metrics dashboard",
       "parent": 4
     }
   ],
