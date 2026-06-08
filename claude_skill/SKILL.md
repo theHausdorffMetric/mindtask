@@ -10,7 +10,7 @@ allowed-tools: Bash(mindtask *)
 
 # mindtask — CLI for concept maps + task dependency graphs
 
-mindtask stores everything in a single `.mindtask.json` file in the current directory.
+mindtask stores everything in a single `.mindtask.json` file, searched for in the current directory and its parents. Any command accepts a global `-f`/`--file <PATH>` flag to target a specific project file instead.
 
 ## Command reference
 
@@ -20,6 +20,7 @@ mindtask stores everything in a single `.mindtask.json` file in the current dire
 mindtask init [--timezone <IANA>]     # Create .mindtask.json
 mindtask validate                     # Check file integrity
 mindtask config timezone [TZ]         # Get/set timezone (--show to display)
+mindtask report [-d|--descriptions]   # Whole project: concept tree + task list
 ```
 
 ### Concepts (tree structure)
@@ -30,9 +31,9 @@ mindtask concept rm <ID>
 mindtask concept mv <ID> --parent <ID|root>
 mindtask concept edit <ID> [--name <NAME>] [--description <DESC>] [--clear-description]
 mindtask concept ls
-mindtask concept tree [ID]            # Full tree, or subtree from ID
+mindtask concept tree [ID] [-d]       # Full tree (or subtree); -d adds descriptions
 mindtask concept show <ID>
-mindtask concept report <ID>          # Subtree + linked tasks + upstream deps
+mindtask concept report <ID> [-d]     # Subtree + linked tasks + upstream deps; -d adds descriptions
 ```
 
 ### Tasks (DAG structure)
@@ -108,7 +109,7 @@ Due dates accept these formats:
 
 - Always `mindtask init` before other commands — it creates `.mindtask.json`.
 - Build the concept tree first, then add tasks and link them.
-- Use `mindtask concept tree` to review structure before exporting.
+- Use `mindtask concept tree` to review structure before exporting; add `-d` to see each concept's description inline.
 - `mindtask export plantuml wbs` gives the richest view: concepts + tasks together.
 - Chain commands: add a task, set its dependency, link it, then export.
 - Use `mindtask search` to find IDs before editing or linking.
