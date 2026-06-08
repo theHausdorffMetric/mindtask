@@ -61,14 +61,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.1.1] - 2026-02-21
 
 ### Added
-- `export` command for PlantUML diagram generation, with podman-based SVG
-  conversion and a test fixture generator.
+- `export` command for PlantUML diagram generation (including Gantt charts).
 
 ### Changed
 - Rewrote the README and fixed clippy warnings.
-
-### Fixed
-- Corrected Gantt chart syntax in exported diagrams.
 
 ## [0.1.0] - 2026-02-18
 
