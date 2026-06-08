@@ -65,7 +65,7 @@ mindtask init [--timezone <IANA_TZ>]    # Create a new .mindtask.json
 mindtask validate                       # Check tree + DAG integrity
 mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
-mindtask report [-d|--descriptions]     # Whole project: concept tree + task list
+mindtask report [-d|--description]     # Whole project: concept tree + task list
 ```
 
 Any command accepts the global `-f`/`--file <PATH>` flag to target a specific project file instead of searching from the current directory.
@@ -80,14 +80,14 @@ mindtask concept edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-descr
 mindtask concept rm <ID>
 mindtask concept mv <ID> --parent <ID|root>
 mindtask concept ls
-mindtask concept tree [<ID>] [-d|--descriptions]
+mindtask concept tree [<ID>] [-d|--description]
 mindtask concept show <ID>
-mindtask concept report <ID> [-d|--descriptions]
+mindtask concept report <ID> [-d|--description]
 ```
 
 Removing a concept fails if it has children or is referenced by tasks — unlink or remove dependents first.
 
-Pass `-d`/`--descriptions` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches.
+Pass `-d`/`--description` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches.
 
 `concept report` shows the concept subtree, all tasks linked to concepts in that subtree, and all transitive upstream dependencies (tasks required by those tasks, even if linked to concepts outside the subtree). Upstream-only tasks are marked `(upstream dep)`.
 
@@ -132,8 +132,8 @@ Links are many-to-many: a task can reference multiple concepts, and a concept ca
 ### Search
 
 ```sh
-mindtask search <QUERY>                 # Search by name (case-insensitive)
-mindtask search <QUERY> --description   # Also search description fields
+mindtask search <QUERY>                  # Search by name (case-insensitive)
+mindtask search <QUERY> -d|--description  # Also search description fields
 ```
 
 ### Export

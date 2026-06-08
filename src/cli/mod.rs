@@ -65,7 +65,7 @@ enum Command {
         /// Search query (case-insensitive substring match)
         query: String,
         /// Also search description fields
-        #[arg(long, short)]
+        #[arg(short, long)]
         description: bool,
     },
     /// Export project data as a diagram
@@ -80,8 +80,8 @@ enum Command {
     /// Report the whole project: concept tree followed by the task list
     Report {
         /// Show concept descriptions below each node in the tree
-        #[arg(short = 'd', long = "descriptions")]
-        descriptions: bool,
+        #[arg(short, long)]
+        description: bool,
     },
     /// Validate the project file
     Validate,
@@ -137,8 +137,8 @@ enum ConceptCommand {
         /// Root concept ID to display a subtree (e.g. 1)
         id: Option<ConceptId>,
         /// Show concept descriptions below each node in the tree
-        #[arg(short = 'd', long = "descriptions")]
-        descriptions: bool,
+        #[arg(short, long)]
+        description: bool,
     },
     /// Show details of a concept
     Show {
@@ -150,8 +150,8 @@ enum ConceptCommand {
         /// Root concept ID (e.g. 1)
         id: ConceptId,
         /// Show concept descriptions below each node in the tree
-        #[arg(short = 'd', long = "descriptions")]
-        descriptions: bool,
+        #[arg(short, long)]
+        description: bool,
     },
 }
 
@@ -316,10 +316,10 @@ pub fn run() -> Result<()> {
 
     match command {
         Command::Init { timezone } => project::init(timezone),
-        Command::Report { descriptions } => {
+        Command::Report { description } => {
             let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
-            concept::tree(&proj, None, descriptions)?;
+            concept::tree(&proj, None, description)?;
             println!();
             task::list(&proj);
             Ok(())
@@ -353,16 +353,16 @@ pub fn run() -> Result<()> {
                     concept::list(&proj);
                     return Ok(());
                 }
-                ConceptCommand::Tree { id, descriptions } => {
-                    concept::tree(&proj, id, descriptions)?;
+                ConceptCommand::Tree { id, description } => {
+                    concept::tree(&proj, id, description)?;
                     return Ok(());
                 }
                 ConceptCommand::Show { id } => {
                     concept::show(&proj, id)?;
                     return Ok(());
                 }
-                ConceptCommand::Report { id, descriptions } => {
-                    concept::report(&proj, id, descriptions)?;
+                ConceptCommand::Report { id, description } => {
+                    concept::report(&proj, id, description)?;
                     return Ok(());
                 }
             }

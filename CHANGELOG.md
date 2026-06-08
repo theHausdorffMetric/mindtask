@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - `concept tree` and `concept report` (and the top-level `report`) accept a
-  `-d`/`--descriptions` flag that prints each concept's description on the line
+  `-d`/`--description` flag that prints each concept's description on the line
   below the node, indented to line up with the tree branches.
 - Global `-f`/`--file <PATH>` flag to operate on an explicit project file,
   bypassing the search for `.mindtask.json` in the current directory and its
