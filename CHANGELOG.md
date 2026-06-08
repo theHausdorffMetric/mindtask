@@ -19,6 +19,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `concept report`, and `report`. Inline references in `concept ls` (the
   `PARENT` column), `concept show`, and `task show` (parent, children,
   dependencies, and linked concepts/tasks) now read as `Name {id}`.
+- Standardized the description toggle on `-d`/`--description` (singular) across
+  `search`, `concept tree`, `concept report`, and `report`. The display flag,
+  briefly named `--descriptions` during development, is `--description` to match
+  the existing `search` flag.
 - Refreshed dependency lockfile (`cargo update`).
 
 ## [0.3.0] - 2026-05-31
