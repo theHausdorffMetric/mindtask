@@ -40,6 +40,7 @@ mindtask concept report <ID> [-d]     # Subtree + linked tasks + upstream deps; 
 
 ```
 mindtask task add <NAME> [--description <DESC>] [--duration <DAYS>] [--due <DATETIME>]
+                         [--concept <ID> ...]   # --concept is repeatable; links the task at creation
 mindtask task rm <ID>
 mindtask task edit <ID> [--name <NAME>] [--description <DESC>] [--clear-description]
                         [--duration <DAYS>] [--clear-duration]
@@ -108,9 +109,10 @@ Due dates accept these formats:
 ## Workflow tips
 
 - Always `mindtask init` before other commands — it creates `.mindtask.json`.
-- Build the concept tree first, then add tasks and link them.
+- Build the concept tree first, then add tasks, linking them at creation with `task add --concept <ID>` (repeatable) instead of a separate `link` step.
+- `add` commands echo the new ID (`Added task 1 "..."`); capture it from that output instead of re-running `search`/`ls`.
 - Use `mindtask concept tree` to review structure before exporting; add `-d` to see each concept's description inline.
 - `mindtask export plantuml wbs` gives the richest view: concepts + tasks together.
-- Chain commands: add a task, set its dependency, link it, then export.
-- Use `mindtask search` to find IDs before editing or linking.
+- Chain commands: add a task (with `--concept` to link it), set its dependency, then export.
+- Use `mindtask search` to find IDs of existing items before editing or linking.
 - Use `mindtask concept report <ID>` to see all work needed for a concept area, including transitive dependencies from outside the subtree.
