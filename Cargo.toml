@@ -1,6 +1,6 @@
 [package]
 name = "mindtask"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 description = "A CLI tool combining mindmaps with task dependency graphs"
 license = "GPL-3.0-only"
@@ -20,6 +20,7 @@ clap = { version = "4", features = ["derive"] }
 jiff = { version = "0.2", features = ["serde"] }
 anyhow = "1"
 termtree = "1.0.0"
+terminal_size = "0.4"
 
 [dev-dependencies]
 tempfile = "3"

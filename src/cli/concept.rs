@@ -146,17 +146,18 @@ pub fn tree(project: &Project, root_id: Option<ConceptId>, show_desc: bool) -> R
         return Ok(());
     }
 
+    let width = resolve_wrap_width(project);
     let trees: Vec<Tree<String>> = match root_id {
         Some(id) => {
             let concept = project
                 .get_concept(id)
                 .ok_or_else(|| anyhow::anyhow!("concept {} not found", id))?;
-            vec![build_tree(project, concept, show_desc)]
+            vec![build_tree(project, concept, show_desc, width, 0)]
         }
         None => project
             .roots()
             .into_iter()
-            .map(|c| build_tree(project, c, show_desc))
+            .map(|c| build_tree(project, c, show_desc, width, 0))
             .collect(),
     };
 
@@ -166,17 +167,70 @@ pub fn tree(project: &Project, root_id: Option<ConceptId>, show_desc: bool) -> R
     Ok(())
 }
 
-fn build_tree(project: &Project, concept: &Concept, show_desc: bool) -> Tree<String> {
+/// Default wrap width when no config is set and the terminal size is unknown
+/// (e.g. output is piped).
+const DEFAULT_WRAP_WIDTH: usize = 80;
+/// Minimum columns reserved for description text regardless of nesting depth,
+/// so deeply-nested descriptions never collapse to nothing.
+const MIN_DESC_WIDTH: usize = 8;
+/// Columns consumed by each level of tree-branch indentation.
+const INDENT_PER_DEPTH: usize = 4;
+
+/// Resolve the column width for wrapping descriptions. The project's configured
+/// `wrap_width` takes precedence; otherwise the detected terminal width is used,
+/// falling back to [`DEFAULT_WRAP_WIDTH`] when neither is available.
+fn resolve_wrap_width(project: &Project) -> usize {
+    if let Some(w) = project.wrap_width {
+        return (w as usize).max(MIN_DESC_WIDTH);
+    }
+    terminal_size::terminal_size()
+        .map(|(terminal_size::Width(w), _)| w as usize)
+        .unwrap_or(DEFAULT_WRAP_WIDTH)
+}
+
+/// Hard-wrap `text` to `width` columns, breaking at the column limit even
+/// mid-word. Existing newlines are preserved as forced breaks. Operates on
+/// Unicode scalar values, not bytes, so multibyte text stays valid.
+fn hard_wrap(text: &str, width: usize) -> String {
+    let width = width.max(1);
+    let mut lines: Vec<String> = Vec::new();
+    for src in text.split('\n') {
+        let chars: Vec<char> = src.chars().collect();
+        if chars.is_empty() {
+            lines.push(String::new());
+        } else {
+            for chunk in chars.chunks(width) {
+                lines.push(chunk.iter().collect());
+            }
+        }
+    }
+    lines.join("\n")
+}
+
+fn build_tree(
+    project: &Project,
+    concept: &Concept,
+    show_desc: bool,
+    width: usize,
+    depth: usize,
+) -> Tree<String> {
     let mut node = match (show_desc, &concept.description) {
         (true, Some(desc)) => {
             // Render the description on the line(s) below the concept; termtree's
             // multiline mode indents continuation lines to line up with the branch.
-            Tree::new(format!("{} {{{}}}\n[{}]", concept.name, concept.id, desc)).with_multiline(true)
+            // The branch prefix consumes `depth * INDENT_PER_DEPTH` columns, so wrap
+            // the bracketed description to whatever width remains.
+            let avail = width
+                .saturating_sub(depth * INDENT_PER_DEPTH)
+                .max(MIN_DESC_WIDTH);
+            let wrapped = hard_wrap(&format!("[{desc}]"), avail);
+            Tree::new(format!("{} {{{}}}\n{wrapped}", concept.name, concept.id))
+                .with_multiline(true)
         }
         _ => Tree::new(format!("{} {{{}}}", concept.name, concept.id)),
     };
     for child in project.children_of(concept.id) {
-        node.push(build_tree(project, child, show_desc));
+        node.push(build_tree(project, child, show_desc, width, depth + 1));
     }
     node
 }
@@ -236,7 +290,8 @@ pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
 
     // 1. Print concept subtree
     println!("=== Concept Subtree ===");
-    let t = build_tree(project, root, show_desc);
+    let width = resolve_wrap_width(project);
+    let t = build_tree(project, root, show_desc, width, 0);
     print!("{t}");
 
     // 2. Collect all concept IDs in subtree
@@ -312,4 +367,59 @@ pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hard_wrap_short_text_unchanged() {
+        assert_eq!(hard_wrap("hello", 80), "hello");
+    }
+
+    #[test]
+    fn hard_wrap_breaks_at_column_limit_mid_word() {
+        // No whitespace to break on: must split exactly at the width.
+        assert_eq!(hard_wrap("abcdefghij", 4), "abcd\nefgh\nij");
+    }
+
+    #[test]
+    fn hard_wrap_preserves_existing_newlines() {
+        assert_eq!(hard_wrap("ab\ncd", 80), "ab\ncd");
+    }
+
+    #[test]
+    fn hard_wrap_preserves_blank_lines() {
+        assert_eq!(hard_wrap("a\n\nb", 80), "a\n\nb");
+    }
+
+    #[test]
+    fn hard_wrap_wraps_each_source_line_independently() {
+        assert_eq!(hard_wrap("abcd\nefgh", 2), "ab\ncd\nef\ngh");
+    }
+
+    #[test]
+    fn hard_wrap_is_char_boundary_safe() {
+        // Each `é` is multibyte; wrapping at 2 chars must not split a scalar.
+        let wrapped = hard_wrap("ééé", 2);
+        assert_eq!(wrapped, "éé\né");
+        // Round-trips as valid UTF-8 with the expected char counts per line.
+        let counts: Vec<usize> = wrapped.lines().map(|l| l.chars().count()).collect();
+        assert_eq!(counts, vec![2, 1]);
+    }
+
+    #[test]
+    fn resolve_wrap_width_prefers_config() {
+        let mut p = Project::new();
+        p.wrap_width = Some(33);
+        assert_eq!(resolve_wrap_width(&p), 33);
+    }
+
+    #[test]
+    fn resolve_wrap_width_clamps_config_to_minimum() {
+        let mut p = Project::new();
+        p.wrap_width = Some(1);
+        assert_eq!(resolve_wrap_width(&p), MIN_DESC_WIDTH);
+    }
 }

@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-09
+
+### Added
+- Concept descriptions printed with `-d`/`--description` in `concept tree`,
+  `concept report`, and the top-level `report` are now hard-wrapped to the
+  available width, keeping continuation lines aligned with the tree branches
+  instead of overflowing and wrapping back to column 0. The wrap width follows
+  the terminal (falling back to 80 when the width is unknown, e.g. piped output).
+- `config wrap-width [<COLS>]` to get or set a fixed wrap width that overrides
+  terminal detection; `--clear` reverts to auto-detection and `--show` prints
+  the current value. The setting persists as `wrap_width` in the project file.
+
 ## [0.3.1] - 2026-06-08
 
 ### Added
@@ -77,4 +89,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dependency graph: concept and task management, task dependencies, `search`,
   due dates with per-project timezone support, and JSON file storage.
 
+[0.4.0]: https://git.sr.ht/~danprobst/mindtask
 [0.3.1]: https://git.sr.ht/~danprobst/mindtask

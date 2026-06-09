@@ -253,6 +253,17 @@ enum ConfigCommand {
         #[arg(long)]
         show: bool,
     },
+    /// Get or set the column width for wrapping descriptions in tree output
+    WrapWidth {
+        /// Width to set (columns). Omit to show the current value.
+        width: Option<u32>,
+        /// Clear the configured width (fall back to terminal width / 80)
+        #[arg(long)]
+        clear: bool,
+        /// Show the current wrap width
+        #[arg(long)]
+        show: bool,
+    },
 }
 
 /// Find the project file by walking up from the current directory.
@@ -468,6 +479,11 @@ pub fn run() -> Result<()> {
             match cmd {
                 ConfigCommand::Timezone { timezone, show } => {
                     if config::timezone(&mut proj, timezone, show)? {
+                        save_project(&path, &proj)?;
+                    }
+                }
+                ConfigCommand::WrapWidth { width, clear, show } => {
+                    if config::wrap_width(&mut proj, width, clear, show)? {
                         save_project(&path, &proj)?;
                     }
                 }

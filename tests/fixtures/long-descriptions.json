@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "timezone": "America/New_York",
+  "concepts": [
+    {
+      "id": 1,
+      "name": "Platform",
+      "description": "The overall platform encompasses every server-side and client-side service we ship, along with the shared infrastructure that ties them together; this description is intentionally long so that it overflows a standard 80-column terminal and demonstrates the new hard-wrapping behaviour at the root level where no branch indentation is consumed."
+    },
+    {
+      "id": 2,
+      "name": "Backend",
+      "description": "Core server-side services: HTTP request handling, background job processing, authentication, and persistence. Nested one level under Platform, so the branch prefix eats four columns and the wrapped text reflows into a slightly narrower box than the root description above it.",
+      "parent": 1
+    },
+    {
+      "id": 3,
+      "name": "API",
+      "description": "Public and internal HTTP endpoints.\nDesign notes:\n- versioned under /v1 and /v2\n- rate limited per API key\n- every long bullet line is wrapped independently so that manual newlines are preserved while still being clamped to the available width at this two-levels-deep position in the tree.",
+      "parent": 2
+    },
+    {
+      "id": 4,
+      "name": "Database",
+      "description": "Persistence and migrations. Three levels deep now, leaving even less horizontal room: the indentation grows by four columns per level, so this paragraph wraps into a visibly tighter column than its ancestors while still aligning its continuation lines under the branch.",
+      "parent": 2
+    },
+    {
+      "id": 5,
+      "name": "Frontend",
+      "description": "Browser-facing single-page application. A second root concept, used to confirm that wrapping is computed independently for each root subtree rather than sharing state across them."
+    },
+    {
+      "id": 6,
+      "name": "Dashboard",
+      "description": "User-facing metrics dashboard with charts, filters, and saved views; long enough to wrap one level under the Frontend root and show that continuation lines still line up with the tree branches.",
+      "parent": 5
+    },
+    {
+      "id": 7,
+      "name": "Terse",
+      "description": "Short one — should not wrap.",
+      "parent": 5
+    }
+  ],
+  "tasks": [
+    {
+      "id": 1,
+      "name": "Design API",
+      "duration": 2.0,
+      "state": "done",
+      "due": "2025-04-01T09:00:00-04:00[America/New_York]",
+      "concepts": [
+        3
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Build API",
+      "duration": 5.0,
+      "state": "in_progress",
+      "due": "2025-04-08T17:00:00-04:00[America/New_York]",
+      "depends_on": [
+        1
+      ],
+      "concepts": [
+        3
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Write migrations",
+      "duration": 1.0,
+      "state": "done",
+      "due": "2025-04-02T12:00:00-04:00[America/New_York]",
+      "concepts": [
+        4
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Build dashboard",
+      "duration": 3.0,
+      "state": "todo",
+      "due": "2025-04-10T17:00:00-04:00[America/New_York]",
+      "depends_on": [
+        2
+      ],
+      "concepts": [
+        6
+      ]
+    }
+  ]
+}

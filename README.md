@@ -65,6 +65,8 @@ mindtask init [--timezone <IANA_TZ>]    # Create a new .mindtask.json
 mindtask validate                       # Check tree + DAG integrity
 mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
+mindtask config wrap-width [<COLS>]     # Get or set the description wrap width
+mindtask config wrap-width --clear      # Revert to terminal-width auto-detection
 mindtask report [-d|--description]     # Whole project: concept tree + task list
 ```
 
@@ -87,7 +89,7 @@ mindtask concept report <ID> [-d|--description]
 
 Removing a concept fails if it has children or is referenced by tasks — unlink or remove dependents first.
 
-Pass `-d`/`--description` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches.
+Pass `-d`/`--description` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches. Long descriptions are hard-wrapped to fit the available width, which follows the terminal (falling back to 80 columns when the width is unknown, e.g. piped output). Set a fixed width with `config wrap-width <COLS>` to override detection, or `config wrap-width --clear` to go back to auto-detection.
 
 `concept report` shows the concept subtree, all tasks linked to concepts in that subtree, and all transitive upstream dependencies (tasks required by those tasks, even if linked to concepts outside the subtree). Upstream-only tasks are marked `(upstream dep)`.
 
@@ -177,6 +179,7 @@ java -jar plantuml.jar -tsvg dag.puml
 {
   "version": 1,
   "timezone": "America/New_York",
+  "wrap_width": 80,
   "concepts": [
     { "id": 1, "name": "Backend" },
     { "id": 2, "name": "API", "parent": 1 },

@@ -20,6 +20,7 @@ mindtask stores everything in a single `.mindtask.json` file, searched for in th
 mindtask init [--timezone <IANA>]     # Create .mindtask.json
 mindtask validate                     # Check file integrity
 mindtask config timezone [TZ]         # Get/set timezone (--show to display)
+mindtask config wrap-width [COLS]     # Get/set description wrap width (--clear to auto-detect)
 mindtask report [-d|--description]    # Whole project: concept tree + task list
 ```
 

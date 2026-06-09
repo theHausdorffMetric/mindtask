@@ -69,6 +69,10 @@ pub struct Project {
     /// Default IANA timezone for due-date parsing (e.g. `"America/New_York"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timezone: Option<String>,
+    /// Column width used to wrap concept descriptions in tree output. When
+    /// unset, the renderer detects the terminal width (falling back to 80).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrap_width: Option<u32>,
     /// All concepts in the project.
     pub concepts: Vec<Concept>,
     /// All tasks in the project.
@@ -87,6 +91,7 @@ impl Project {
         Self {
             version: 1,
             timezone: None,
+            wrap_width: None,
             concepts: Vec::new(),
             tasks: Vec::new(),
             next_concept_id: 1,
