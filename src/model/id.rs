@@ -20,13 +20,15 @@ pub struct TaskId(pub u64);
 
 impl fmt::Display for ConceptId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        // Via `f.pad` so width/alignment flags (e.g. `{:<6}`) are honored in tables.
+        f.pad(&self.0.to_string())
     }
 }
 
 impl fmt::Display for TaskId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        // Via `f.pad` so width/alignment flags (e.g. `{:<6}`) are honored in tables.
+        f.pad(&self.0.to_string())
     }
 }
 

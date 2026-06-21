@@ -1,6 +1,7 @@
 mod concept;
 mod config;
 mod project;
+mod render;
 mod search;
 mod task;
 

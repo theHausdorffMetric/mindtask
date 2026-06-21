@@ -21,11 +21,12 @@ pub enum TaskState {
 
 impl std::fmt::Display for TaskState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Todo => write!(f, "todo"),
-            Self::InProgress => write!(f, "in_progress"),
-            Self::Done => write!(f, "done"),
-        }
+        // Via `f.pad` so width/alignment flags (e.g. `{:<14}`) are honored in tables.
+        f.pad(match self {
+            Self::Todo => "todo",
+            Self::InProgress => "in_progress",
+            Self::Done => "done",
+        })
     }
 }
 
