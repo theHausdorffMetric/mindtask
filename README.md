@@ -138,6 +138,21 @@ mindtask search <QUERY>                  # Search by name (case-insensitive)
 mindtask search <QUERY> -d|--description  # Also search description fields
 ```
 
+### Scheduling
+
+`mindtask schedule` computes a Critical Path Method (CPM) schedule from task
+durations (in days) and finish-to-start dependencies: each task's earliest
+start/finish, its slack, the critical path, and the overall project duration.
+
+```sh
+mindtask schedule              # full schedule table + critical path
+mindtask schedule --critical   # only the critical-path tasks
+```
+
+Times are day-offsets from the project start. Tasks without a `--duration` are
+treated as zero-day milestones; if no task has a duration there is nothing to
+schedule and the command says so.
+
 ### Export
 
 Generate diagrams for external renderers. Supported formats: `plantuml`, `mermaid` (stubbed).
@@ -152,7 +167,7 @@ Diagram types:
 |---------|-------------|--------------|
 | `tree`  | Concept tree as a mindmap | Concept ID (renders subtree) |
 | `dag`   | Task dependency graph | Task ID (renders downstream) |
-| `gantt` | Gantt chart from tasks with due dates | — |
+| `gantt` | Gantt chart — CPM schedule when tasks have dependencies, else due dates | — |
 | `wbs`   | Work breakdown structure (concepts + tasks) | — |
 
 Examples:
@@ -162,7 +177,7 @@ mindtask export plantuml tree           # Full concept tree
 mindtask export plantuml tree 1         # Subtree rooted at concept 1
 mindtask export plantuml dag            # Full task DAG
 mindtask export plantuml dag 1          # Task 1 and its downstream dependents
-mindtask export plantuml gantt          # Gantt chart (tasks with due dates)
+mindtask export plantuml gantt          # Gantt chart (computed schedule, or due dates)
 mindtask export plantuml wbs            # Work breakdown structure
 ```
 

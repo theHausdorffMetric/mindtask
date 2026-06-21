@@ -1,8 +1,11 @@
 # mindtask — Status
 
-## Current Phase: Concept Report
+## Current Phase: Scheduling (Phase 6)
 
-Phases 1–5 are implemented plus concept report: data model, concept tree, task DAG, CLI, PlantUML diagram export, and concept subtree reporting with transitive dependency analysis.
+Phases 1–6 are implemented: data model, concept tree, task DAG, CLI, PlantUML
+diagram export, concept subtree reporting, and CPM scheduling (earliest/latest
+times, slack, critical path) surfaced by `mindtask schedule` and the
+schedule-driven Gantt.
 
 ## What's Done
 
@@ -78,6 +81,13 @@ Phases 1–5 are implemented plus concept report: data model, concept tree, task
 - [x] Mermaid format stubbed for future implementation
 - [x] Test fixture generator (`tests/fixtures/generate.sh`) and justfile for rendering
 
+### Phase 6: Scheduling (CPM)
+- [x] `graph::schedule` library module: forward/backward pass, slack, critical path
+- [x] `mindtask schedule` command (ES/EF/slack table, critical path, `--critical`)
+- [x] Schedule-driven PlantUML Gantt (relative days + critical-path highlight)
+- [x] Relative day-offsets; no-duration tasks are zero-day milestones
+- See `docs/PHASE-6-PLAN.md` (6.4 — calendar anchoring / deadline slack — deferred)
+
 ## Architecture
 
 ```
@@ -105,9 +115,9 @@ src/
 
 ## Next Steps
 
-### Phase 6: Scheduling
-- [ ] Forward-pass scheduling (earliest start/finish)
-- [ ] Critical path computation
+### Phase 6.4: Scheduling extras (deferred)
+- [ ] `--start <DATE>` calendar anchoring (jiff + project timezone)
+- [ ] `due` overlay / deadline-driven backward pass (negative slack)
 
 ### Phase 7: Polish
 - [ ] Mermaid diagram export

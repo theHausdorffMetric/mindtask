@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Critical Path Method (CPM) scheduling. `mindtask schedule` prints each task's
+  earliest start/finish and slack, flags the critical path, and reports the
+  overall project duration; `--critical` shows only the path. Built on a new
+  pure library module, `mindtask::graph::schedule`.
+- The PlantUML Gantt export (`export plantuml gantt`) is now schedule-driven:
+  when tasks have dependencies it positions them by the computed schedule
+  (relative days) and highlights the critical path, falling back to the
+  due-date chart when there are no dependencies.
+
 ## [0.4.1] - 2026-06-21
 
 ### Fixed
