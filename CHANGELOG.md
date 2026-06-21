@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-21
+
+### Fixed
+- Table column alignment in the `task` and `search` listings. The `Display`
+  impls for task/concept ids and task state ignored the formatter's
+  width/alignment flags, so the ID and STATE columns were never padded and
+  every row shifted out of line with the header. They now honor the flags.
+
+### Changed
+- Task and concept tables are now rendered through a shared `render_table`
+  helper that sizes columns adaptively to their contents and shrinks them to
+  fit the available width, replacing the previous fixed-width column formats
+  and removing the duplicated per-command formatting code.
+
 ## [0.4.0] - 2026-06-09
 
 ### Added
