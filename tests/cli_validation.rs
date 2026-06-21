@@ -298,6 +298,53 @@ fn report_on_empty_project_succeeds() {
 }
 
 #[test]
+fn schedule_reports_critical_path_and_duration() {
+    // Design(1) -> Build(3); Docs(1) is independent. Critical path = Design,Build (4d).
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [],
+          "tasks": [
+            { "id": 1, "name": "Design", "duration": 1.0 },
+            { "id": 2, "name": "Build", "duration": 3.0, "depends_on": [1] },
+            { "id": 3, "name": "Docs", "duration": 1.0 }
+          ]
+        }"#,
+    );
+    let out = run(dir.path(), &["schedule"]);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("Project duration: 4 days"),
+        "stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains("Critical path: Design → Build"),
+        "stdout: {stdout}"
+    );
+    // The off-path task carries slack and is not marked critical.
+    assert!(stdout.contains("critical"), "stdout: {stdout}");
+}
+
+#[test]
+fn schedule_without_durations_hints() {
+    let dir =
+        project_dir(r#"{ "version": 1, "concepts": [], "tasks": [ { "id": 1, "name": "x" } ] }"#);
+    let out = run(dir.path(), &["schedule"]);
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("No task durations set"), "stdout: {stdout}");
+}
+
+#[test]
 fn invalid_timezone_is_rejected() {
     let dir =
         project_dir(r#"{ "version": 1, "timezone": "Bogus/Zone", "concepts": [], "tasks": [] }"#);

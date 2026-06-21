@@ -2,6 +2,7 @@ mod concept;
 mod config;
 mod project;
 mod render;
+mod schedule;
 mod search;
 mod task;
 
@@ -87,6 +88,12 @@ enum Command {
         /// Show concept descriptions below each node in the tree
         #[arg(short, long)]
         description: bool,
+    },
+    /// Show the computed schedule: earliest start/finish, slack, critical path
+    Schedule {
+        /// Show only tasks on the critical path
+        #[arg(long)]
+        critical: bool,
     },
     /// Validate the project file
     Validate,
@@ -339,6 +346,11 @@ pub fn run() -> Result<()> {
             println!();
             task::list(&proj);
             Ok(())
+        }
+        Command::Schedule { critical } => {
+            let path = resolve_project_file(file)?;
+            let proj = load_project(&path)?;
+            schedule::run(&proj, critical)
         }
         Command::Validate => {
             let path = resolve_project_file(file)?;
