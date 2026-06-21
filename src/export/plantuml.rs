@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
 
+use crate::graph::schedule::{Schedule, ScheduledTask, schedule};
 use crate::model::concept::Concept;
 use crate::model::id::{ConceptId, TaskId};
 use crate::model::project::Project;
@@ -133,10 +134,79 @@ fn collect_downstream(project: &Project, root_id: TaskId) -> Vec<&Task> {
         .collect()
 }
 
+/// Generate a PlantUML Gantt chart.
+///
+/// When any task has a dependency, tasks are positioned by the computed CPM
+/// schedule (relative days) and the critical path is highlighted. Otherwise it
+/// falls back to a due-date chart (start = due − duration; tasks without a due
+/// date are skipped).
+pub fn gantt(project: &Project) -> String {
+    let has_deps = project.tasks.iter().any(|t| !t.depends_on.is_empty());
+    if has_deps {
+        gantt_scheduled(project)
+    } else {
+        gantt_due(project)
+    }
+}
+
+/// Schedule-driven Gantt: relative day positioning from the CPM schedule, with
+/// the critical path highlighted (critical tasks take colour priority over state).
+fn gantt_scheduled(project: &Project) -> String {
+    let sched = match schedule(&project.tasks) {
+        Ok(s) => s,
+        Err(_) => return gantt_due(project), // cyclic input — pre-validate guards this
+    };
+
+    let mut out = String::from("@startgantt\n");
+    for st in &sched.tasks {
+        let Some(task) = project.get_task(st.id) else {
+            continue;
+        };
+        let days = st.duration.round().max(0.0) as i64;
+        writeln!(out, "[{}] lasts {days} days", task.name).unwrap();
+
+        if let Some(bind) = binding_predecessor(project, &sched, st) {
+            writeln!(out, "[{}] starts at [{bind}]'s end", task.name).unwrap();
+        }
+
+        if st.critical {
+            writeln!(out, "[{}] is colored in Tomato", task.name).unwrap();
+        } else {
+            match task.state {
+                TaskState::Done => {
+                    writeln!(out, "[{}] is colored in LightGreen", task.name).unwrap();
+                }
+                TaskState::InProgress => {
+                    writeln!(out, "[{}] is colored in Gold", task.name).unwrap();
+                }
+                TaskState::Todo => {}
+            }
+        }
+    }
+    out.push_str("@endgantt\n");
+    out
+}
+
+/// The predecessor whose finish sets this task's earliest start (ES = its EF),
+/// used as the PlantUML start constraint. None when the task has no dependency.
+fn binding_predecessor<'a>(
+    project: &'a Project,
+    sched: &Schedule,
+    st: &ScheduledTask,
+) -> Option<&'a str> {
+    let task = project.get_task(st.id)?;
+    task.depends_on
+        .iter()
+        .filter_map(|d| sched.get(*d).map(|sd| (*d, sd.earliest_finish)))
+        .find(|(_, ef)| (ef - st.earliest_start).abs() < 1e-9)
+        .and_then(|(d, _)| project.get_task(d))
+        .map(|t| t.name.as_str())
+}
+
 /// Generate a PlantUML Gantt chart from tasks with due dates.
 ///
 /// Tasks without a due date are skipped.
-pub fn gantt(project: &Project) -> String {
+fn gantt_due(project: &Project) -> String {
     let mut out = String::from("@startgantt\n");
 
     let tasks_with_due: Vec<&Task> = project.tasks.iter().filter(|t| t.due.is_some()).collect();
@@ -425,6 +495,37 @@ mod tests {
         let p = Project::new();
         let output = gantt(&p);
         assert_eq!(output, "@startgantt\n@endgantt\n");
+    }
+
+    #[test]
+    fn gantt_scheduled_when_dependencies_exist() {
+        // A(1) -> B(2): a single chain, so both are critical and relative.
+        let mut p = Project::new();
+        p.add_task("A".into(), None, Some(1.0), None);
+        p.add_task("B".into(), None, Some(2.0), None);
+        p.add_dependency(TaskId(2), TaskId(1)).unwrap();
+        let out = gantt(&p);
+        assert!(out.contains("[A] lasts 1 days"), "{out}");
+        assert!(out.contains("[B] lasts 2 days"), "{out}");
+        assert!(out.contains("[B] starts at [A]'s end"), "{out}");
+        assert!(out.contains("[A] is colored in Tomato"), "{out}");
+        assert!(out.contains("[B] is colored in Tomato"), "{out}");
+    }
+
+    #[test]
+    fn gantt_scheduled_colors_noncritical_by_state() {
+        // A -> Long(5) is the critical path; A -> Short(1) has slack.
+        let mut p = Project::new();
+        p.add_task("A".into(), None, Some(1.0), None); // 1
+        p.add_task("Long".into(), None, Some(5.0), None); // 2 (critical)
+        p.add_task("Short".into(), None, Some(1.0), None); // 3 (slack)
+        p.add_dependency(TaskId(2), TaskId(1)).unwrap();
+        p.add_dependency(TaskId(3), TaskId(1)).unwrap();
+        p.set_task_state(TaskId(3), TaskState::InProgress).unwrap();
+        let out = gantt(&p);
+        assert!(out.contains("[Long] is colored in Tomato"), "{out}");
+        // Off the critical path → keeps its workflow-state colour.
+        assert!(out.contains("[Short] is colored in Gold"), "{out}");
     }
 
     #[test]
