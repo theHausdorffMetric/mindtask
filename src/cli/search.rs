@@ -1,24 +1,10 @@
 use mindtask::model::project::Project;
 
+use super::render::{render_table, resolve_wrap_width};
+use super::task::{join_ids, task_cells};
+
 fn matches(haystack: &str, query: &str) -> bool {
     haystack.to_lowercase().contains(query)
-}
-
-fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
-    let tz_name = project.timezone_or_utc();
-    let z = if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
-        due.with_time_zone(tz)
-    } else {
-        due.clone()
-    };
-    format!(
-        "{}-{:02}-{:02} {:02}:{:02}",
-        z.year(),
-        z.month(),
-        z.day(),
-        z.hour(),
-        z.minute()
-    )
 }
 
 pub fn search(project: &Project, query: &str, search_description: bool) {
@@ -50,52 +36,47 @@ pub fn search(project: &Project, query: &str, search_description: bool) {
     }
 
     if !matching_concepts.is_empty() {
-        println!("{:<6} {:<20} PARENT", "ID", "NAME");
-        for concept in &matching_concepts {
-            let parent = concept
-                .parent
-                .map(|p| p.to_string())
-                .unwrap_or_else(|| "-".to_string());
-            println!("{:<6} {:<20} {}", concept.id, concept.name, parent);
-        }
+        let rows: Vec<Vec<String>> = matching_concepts
+            .iter()
+            .map(|concept| {
+                let parent = concept
+                    .parent
+                    .map(|p| p.to_string())
+                    .unwrap_or_else(|| "-".to_string());
+                vec![concept.id.to_string(), concept.name.clone(), parent]
+            })
+            .collect();
+        println!(
+            "{}",
+            render_table(
+                &["ID", "NAME", "PARENT"],
+                &rows,
+                Some(1),
+                resolve_wrap_width(project)
+            )
+        );
     }
 
     if !matching_tasks.is_empty() {
         if !matching_concepts.is_empty() {
             println!();
         }
+        let rows: Vec<Vec<String>> = matching_tasks
+            .iter()
+            .map(|&task| {
+                let mut cells = task_cells(task, project);
+                cells.push(join_ids(&task.concepts));
+                cells
+            })
+            .collect();
         println!(
-            "{:<6} {:<25} {:<14} {:<18} {:<15} CONCEPTS",
-            "ID", "NAME", "STATE", "DUE", "DEPENDS ON"
+            "{}",
+            render_table(
+                &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", "CONCEPTS"],
+                &rows,
+                Some(1),
+                resolve_wrap_width(project),
+            )
         );
-        for task in &matching_tasks {
-            let deps = if task.depends_on.is_empty() {
-                "-".to_string()
-            } else {
-                task.depends_on
-                    .iter()
-                    .map(|d| d.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            };
-            let concepts = if task.concepts.is_empty() {
-                "-".to_string()
-            } else {
-                task.concepts
-                    .iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            };
-            let due = task
-                .due
-                .as_ref()
-                .map(|d| format_due_short(d, project))
-                .unwrap_or_else(|| "-".to_string());
-            println!(
-                "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
-                task.id, task.name, task.state, due, deps, concepts
-            );
-        }
     }
 }

@@ -7,7 +7,8 @@ use mindtask::model::concept::Concept;
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
 
-use super::render::{MIN_WRAP_WIDTH, hard_wrap, resolve_wrap_width};
+use super::render::{MIN_WRAP_WIDTH, hard_wrap, render_table, resolve_wrap_width};
+use super::task::task_cells;
 
 pub fn add(
     project: &mut Project,
@@ -88,20 +89,32 @@ pub fn list(project: &Project) {
         return;
     }
 
-    println!("{:<6} {:<20} PARENT", "ID", "NAME");
-    for concept in &project.concepts {
-        let parent = match concept.parent {
-            Some(pid) => {
-                let name = project
-                    .get_concept(pid)
-                    .map(|c| c.name.as_str())
-                    .unwrap_or("???");
-                format!("{name} {{{pid}}}")
-            }
-            None => "-".to_string(),
-        };
-        println!("{:<6} {:<20} {}", concept.id, concept.name, parent);
-    }
+    let rows: Vec<Vec<String>> = project
+        .concepts
+        .iter()
+        .map(|concept| {
+            let parent = match concept.parent {
+                Some(pid) => {
+                    let name = project
+                        .get_concept(pid)
+                        .map(|c| c.name.as_str())
+                        .unwrap_or("???");
+                    format!("{name} {{{pid}}}")
+                }
+                None => "-".to_string(),
+            };
+            vec![concept.id.to_string(), concept.name.clone(), parent]
+        })
+        .collect();
+    println!(
+        "{}",
+        render_table(
+            &["ID", "NAME", "PARENT"],
+            &rows,
+            Some(1),
+            resolve_wrap_width(project)
+        )
+    );
 }
 
 pub fn show(project: &Project, id: ConceptId) -> Result<()> {
@@ -239,23 +252,6 @@ fn collect_upstream_tasks(project: &Project, seed: &HashSet<TaskId>) -> HashSet<
 }
 
 /// Format a short due date for report columns.
-fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
-    let tz_name = project.timezone_or_utc();
-    let z = if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
-        due.with_time_zone(tz)
-    } else {
-        due.clone()
-    };
-    format!(
-        "{}-{:02}-{:02} {:02}:{:02}",
-        z.year(),
-        z.month(),
-        z.day(),
-        z.hour(),
-        z.minute()
-    )
-}
-
 pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
     let root = project
         .get_concept(id)
@@ -303,35 +299,28 @@ pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
     });
 
     println!("\n=== Tasks ===");
+    let rows: Vec<Vec<String>> = tasks
+        .iter()
+        .map(|&task| {
+            let mut cells = task_cells(task, project);
+            let marker = if direct_task_ids.contains(&task.id) {
+                String::new()
+            } else {
+                "(upstream dep)".to_string()
+            };
+            cells.push(marker);
+            cells
+        })
+        .collect();
     println!(
-        "{:<6} {:<25} {:<14} {:<18} {:<15} ",
-        "ID", "NAME", "STATE", "DUE", "DEPENDS ON"
+        "{}",
+        render_table(
+            &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", ""],
+            &rows,
+            Some(1),
+            resolve_wrap_width(project),
+        )
     );
-    for task in &tasks {
-        let deps = if task.depends_on.is_empty() {
-            "-".to_string()
-        } else {
-            task.depends_on
-                .iter()
-                .map(|d| d.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-        let due = task
-            .due
-            .as_ref()
-            .map(|d| format_due_short(d, project))
-            .unwrap_or_else(|| "-".to_string());
-        let marker = if direct_task_ids.contains(&task.id) {
-            ""
-        } else {
-            "(upstream dep)"
-        };
-        println!(
-            "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
-            task.id, task.name, task.state, due, deps, marker
-        );
-    }
 
     let upstream_count = all_task_ids.len() - direct_task_ids.len();
     if upstream_count > 0 {

@@ -2,7 +2,9 @@ use anyhow::{Context, Result};
 
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
-use mindtask::model::task::{TaskState, parse_due};
+use mindtask::model::task::{Task, TaskState, parse_due};
+
+use super::render::{render_table, resolve_wrap_width};
 
 /// Format a Zoned datetime for display, converting to the project timezone.
 fn format_due(due: &jiff::Zoned, project: &Project) -> String {
@@ -16,7 +18,7 @@ fn format_due(due: &jiff::Zoned, project: &Project) -> String {
 }
 
 /// Format a short due date for list columns (date + time, no seconds).
-fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
+pub(super) fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
     let tz_name = project.timezone_or_utc();
     let z = if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
         due.with_time_zone(tz)
@@ -31,6 +33,35 @@ fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
         z.hour(),
         z.minute()
     )
+}
+
+/// Join a list of IDs into a table cell, or `-` when empty.
+pub(super) fn join_ids<T: std::fmt::Display>(ids: &[T]) -> String {
+    if ids.is_empty() {
+        "-".to_string()
+    } else {
+        ids.iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+}
+
+/// The shared leading cells of a task-table row: ID, NAME, STATE, DUE,
+/// DEPENDS ON. Callers append the final column (CONCEPTS, or a report marker).
+pub(super) fn task_cells(task: &Task, project: &Project) -> Vec<String> {
+    let due = task
+        .due
+        .as_ref()
+        .map(|d| format_due_short(d, project))
+        .unwrap_or_else(|| "-".to_string());
+    vec![
+        task.id.to_string(),
+        task.name.clone(),
+        task.state.to_string(),
+        due,
+        join_ids(&task.depends_on),
+    ]
 }
 
 pub fn add(
@@ -129,39 +160,24 @@ pub fn list(project: &Project) {
         return;
     }
 
+    let rows: Vec<Vec<String>> = project
+        .tasks
+        .iter()
+        .map(|task| {
+            let mut cells = task_cells(task, project);
+            cells.push(join_ids(&task.concepts));
+            cells
+        })
+        .collect();
     println!(
-        "{:<6} {:<25} {:<14} {:<18} {:<15} CONCEPTS",
-        "ID", "NAME", "STATE", "DUE", "DEPENDS ON"
+        "{}",
+        render_table(
+            &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", "CONCEPTS"],
+            &rows,
+            Some(1),
+            resolve_wrap_width(project),
+        )
     );
-    for task in &project.tasks {
-        let deps = if task.depends_on.is_empty() {
-            "-".to_string()
-        } else {
-            task.depends_on
-                .iter()
-                .map(|d| d.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-        let concepts = if task.concepts.is_empty() {
-            "-".to_string()
-        } else {
-            task.concepts
-                .iter()
-                .map(|c| c.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
-        let due = task
-            .due
-            .as_ref()
-            .map(|d| format_due_short(d, project))
-            .unwrap_or_else(|| "-".to_string());
-        println!(
-            "{:<6} {:<25} {:<14} {:<18} {:<15} {}",
-            task.id, task.name, task.state, due, deps, concepts
-        );
-    }
 }
 
 pub fn show(project: &Project, id: TaskId) -> Result<()> {
