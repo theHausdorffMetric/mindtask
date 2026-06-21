@@ -5,4 +5,5 @@
 //! and full project validation.
 
 pub mod dag;
+pub mod schedule;
 pub mod tree;
