@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
-use mindtask::model::task::{parse_due, TaskState};
+use mindtask::model::task::{TaskState, parse_due};
 
 /// Format a Zoned datetime for display, converting to the project timezone.
 fn format_due(due: &jiff::Zoned, project: &Project) -> String {
@@ -70,7 +70,10 @@ pub fn add(
             .map(|c| c.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        println!("Added task {} \"{}\" (linked to concept(s) {})", id, name, linked);
+        println!(
+            "Added task {} \"{}\" (linked to concept(s) {})",
+            id, name, linked
+        );
     }
     Ok(())
 }
@@ -220,20 +223,14 @@ pub fn set_state(project: &mut Project, id: TaskId, state: TaskState) -> Result<
     Ok(())
 }
 
-pub fn set_due(
-    project: &mut Project,
-    id: TaskId,
-    date: Option<String>,
-    clear: bool,
-) -> Result<()> {
+pub fn set_due(project: &mut Project, id: TaskId, date: Option<String>, clear: bool) -> Result<()> {
     if clear {
         project
             .set_task_due(id, None)
             .context("failed to clear due date")?;
         println!("Cleared due date for {}", id);
     } else if let Some(date_str) = date {
-        let due = parse_due(&date_str, project.timezone_or_utc())
-            .context("invalid due date")?;
+        let due = parse_due(&date_str, project.timezone_or_utc()).context("invalid due date")?;
         project
             .set_task_due(id, Some(due.clone()))
             .context("failed to set due date")?;
@@ -256,7 +253,10 @@ pub fn remove_dep(project: &mut Project, task_id: TaskId, depends_on: TaskId) ->
     project
         .remove_dependency(task_id, depends_on)
         .context("failed to remove dependency")?;
-    println!("Removed dependency: {} no longer depends on {}", task_id, depends_on);
+    println!(
+        "Removed dependency: {} no longer depends on {}",
+        task_id, depends_on
+    );
     Ok(())
 }
 

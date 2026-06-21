@@ -95,10 +95,7 @@ pub fn render(
     }
 }
 
-fn parse_concept_root(
-    project: &Project,
-    root: Option<&str>,
-) -> Result<Option<ConceptId>, String> {
+fn parse_concept_root(project: &Project, root: Option<&str>) -> Result<Option<ConceptId>, String> {
     let root_id = root
         .map(|s| s.parse::<ConceptId>())
         .transpose()

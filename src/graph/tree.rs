@@ -72,10 +72,8 @@ mod tests {
     fn is_ancestor_basic() {
         let mut p = Project::new();
         p.add_concept("A".into(), None, None).unwrap();
-        p.add_concept("B".into(), Some(ConceptId(1)), None)
-            .unwrap();
-        p.add_concept("C".into(), Some(ConceptId(2)), None)
-            .unwrap();
+        p.add_concept("B".into(), Some(ConceptId(1)), None).unwrap();
+        p.add_concept("C".into(), Some(ConceptId(2)), None).unwrap();
 
         assert!(is_ancestor(&p, ConceptId(1), ConceptId(2)));
         assert!(is_ancestor(&p, ConceptId(1), ConceptId(3)));
@@ -88,8 +86,7 @@ mod tests {
     fn validate_tree_valid() {
         let mut p = Project::new();
         p.add_concept("A".into(), None, None).unwrap();
-        p.add_concept("B".into(), Some(ConceptId(1)), None)
-            .unwrap();
+        p.add_concept("B".into(), Some(ConceptId(1)), None).unwrap();
         assert!(validate_tree(&p).is_ok());
     }
 

@@ -60,7 +60,10 @@ fn operational_command_rejects_duplicate_concept_id() {
     let out = run(dir.path(), &["concept", "ls"]);
     assert!(!out.status.success(), "expected failure on duplicate IDs");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("duplicate concept ID 1"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("duplicate concept ID 1"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]
@@ -69,7 +72,10 @@ fn validate_reports_duplicate_concept_id() {
     let out = run(dir.path(), &["validate"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("duplicate concept ID 1"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("duplicate concept ID 1"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]
@@ -105,7 +111,11 @@ fn task_add_with_concept_links_at_creation() {
         dir.path(),
         &["task", "add", "Work", "--concept", "1", "--concept", "2"],
     );
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     // The new task should be linked to both concepts on disk.
     let show = run(dir.path(), &["task", "show", "1"]);
@@ -152,7 +162,11 @@ fn report_shows_concept_tree_then_task_list() {
         }"#,
     );
     let out = run(dir.path(), &["report"]);
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
 
     // Concept tree section (termtree renders the hierarchy with IDs).
@@ -168,7 +182,10 @@ fn report_shows_concept_tree_then_task_list() {
     // Tree must come before the task table.
     let tree_pos = stdout.find("Backend {1}").unwrap();
     let list_pos = stdout.find("DEPENDS ON").unwrap();
-    assert!(tree_pos < list_pos, "tree should precede task list:\n{stdout}");
+    assert!(
+        tree_pos < list_pos,
+        "tree should precede task list:\n{stdout}"
+    );
 }
 
 #[test]
@@ -187,20 +204,34 @@ fn concept_tree_descriptions_flag_shows_descriptions_indented() {
 
     // Default tree output omits descriptions entirely.
     let plain = run(dir.path(), &["concept", "tree"]);
-    assert!(plain.status.success(), "stderr: {}", String::from_utf8_lossy(&plain.stderr));
+    assert!(
+        plain.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&plain.stderr)
+    );
     let plain_out = String::from_utf8_lossy(&plain.stdout);
     assert!(plain_out.contains("Backend {1}"), "stdout: {plain_out}");
-    assert!(!plain_out.contains("Core services"), "default tree leaked description: {plain_out}");
+    assert!(
+        !plain_out.contains("Core services"),
+        "default tree leaked description: {plain_out}"
+    );
 
     // With -d, the description rides on the line below its concept, indented to
     // line up with the branch (termtree's multiline skip glyphs).
     let desc = run(dir.path(), &["concept", "tree", "-d"]);
-    assert!(desc.status.success(), "stderr: {}", String::from_utf8_lossy(&desc.stderr));
+    assert!(
+        desc.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&desc.stderr)
+    );
     let desc_out = String::from_utf8_lossy(&desc.stdout);
     assert!(desc_out.contains("[Core services]"), "stdout: {desc_out}");
     // API is a non-last child, so its description line is prefixed with the
     // vertical-continuation glyph.
-    assert!(desc_out.contains("\u{2502}   [HTTP layer]"), "stdout: {desc_out}");
+    assert!(
+        desc_out.contains("\u{2502}   [HTTP layer]"),
+        "stdout: {desc_out}"
+    );
     // A concept without a description gets no extra line.
     assert!(!desc_out.contains("Database {3}\n["), "stdout: {desc_out}");
 }
@@ -228,11 +259,22 @@ fn file_flag_selects_an_explicit_project_path() {
         .current_dir(other.path())
         .output()
         .expect("failed to spawn mindtask");
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
-    assert!(String::from_utf8_lossy(&out.stdout).contains("Solo"), "stdout: {}", String::from_utf8_lossy(&out.stdout));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("Solo"),
+        "stdout: {}",
+        String::from_utf8_lossy(&out.stdout)
+    );
 
     // A non-existent override path is a clean error, not a fallback search.
-    let missing = run(other.path(), &["--file", "/no/such/file.json", "concept", "ls"]);
+    let missing = run(
+        other.path(),
+        &["--file", "/no/such/file.json", "concept", "ls"],
+    );
     assert!(!missing.status.success());
     assert!(
         String::from_utf8_lossy(&missing.stderr).contains("project file not found"),
@@ -245,7 +287,11 @@ fn file_flag_selects_an_explicit_project_path() {
 fn report_on_empty_project_succeeds() {
     let dir = project_dir(r#"{ "version": 1, "concepts": [], "tasks": [] }"#);
     let out = run(dir.path(), &["report"]);
-    assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("No concepts."), "stdout: {stdout}");
     assert!(stdout.contains("No tasks."), "stdout: {stdout}");
@@ -253,20 +299,25 @@ fn report_on_empty_project_succeeds() {
 
 #[test]
 fn invalid_timezone_is_rejected() {
-    let dir = project_dir(
-        r#"{ "version": 1, "timezone": "Bogus/Zone", "concepts": [], "tasks": [] }"#,
-    );
+    let dir =
+        project_dir(r#"{ "version": 1, "timezone": "Bogus/Zone", "concepts": [], "tasks": [] }"#);
     // validate reports it...
     let out = run(dir.path(), &["validate"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("invalid timezone 'Bogus/Zone'"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("invalid timezone 'Bogus/Zone'"),
+        "stderr: {stderr}"
+    );
 
     // ...and the load-time guard blocks operational commands too.
     let out = run(dir.path(), &["task", "ls"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(stderr.contains("invalid timezone 'Bogus/Zone'"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("invalid timezone 'Bogus/Zone'"),
+        "stderr: {stderr}"
+    );
 }
 
 #[test]

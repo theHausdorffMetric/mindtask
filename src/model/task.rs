@@ -55,7 +55,8 @@ pub struct Task {
     /// Optional longer description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Estimated duration in arbitrary units (e.g. hours).
+    /// Estimated duration in days (matches the `--duration <DAYS>` CLI flag and
+    /// the Gantt export, which spans `duration` days).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration: Option<f64>,
     /// Current workflow state.
@@ -97,9 +98,7 @@ pub fn parse_due(input: &str, default_tz: &str) -> Result<Zoned> {
 
     // Try as civil date (midnight)
     if let Ok(date) = input.parse::<jiff::civil::Date>() {
-        return date
-            .to_zoned(tz)
-            .context("failed to convert date to zoned");
+        return date.to_zoned(tz).context("failed to convert date to zoned");
     }
 
     anyhow::bail!(
@@ -114,18 +113,12 @@ mod tests {
 
     #[test]
     fn task_state_serde() {
-        assert_eq!(
-            serde_json::to_string(&TaskState::Todo).unwrap(),
-            "\"todo\""
-        );
+        assert_eq!(serde_json::to_string(&TaskState::Todo).unwrap(), "\"todo\"");
         assert_eq!(
             serde_json::to_string(&TaskState::InProgress).unwrap(),
             "\"in_progress\""
         );
-        assert_eq!(
-            serde_json::to_string(&TaskState::Done).unwrap(),
-            "\"done\""
-        );
+        assert_eq!(serde_json::to_string(&TaskState::Done).unwrap(), "\"done\"");
     }
 
     #[test]
@@ -164,7 +157,10 @@ mod tests {
         let json = serde_json::to_string_pretty(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();
         assert!(parsed.due.is_some());
-        assert_eq!(parsed.due.unwrap().time_zone().iana_name(), Some("America/New_York"));
+        assert_eq!(
+            parsed.due.unwrap().time_zone().iana_name(),
+            Some("America/New_York")
+        );
     }
 
     #[test]

@@ -18,7 +18,11 @@ const PROJECT_FILE: &str = ".mindtask.json";
 const DEFAULT_TIMEZONE: &str = "Europe/Zurich";
 
 #[derive(Parser)]
-#[command(name = "mindtask", about = "Combine mindmaps with task dependency graphs", version)]
+#[command(
+    name = "mindtask",
+    about = "Combine mindmaps with task dependency graphs",
+    version
+)]
 pub struct Cli {
     /// Path to the project file to operate on, bypassing the search for
     /// `.mindtask.json` in the current directory and its parents
@@ -416,9 +420,7 @@ pub fn run() -> Result<()> {
                     return Ok(());
                 }
                 TaskCommand::State { id, state } => task::set_state(&mut proj, id, state)?,
-                TaskCommand::Due { id, date, clear } => {
-                    task::set_due(&mut proj, id, date, clear)?
-                }
+                TaskCommand::Due { id, date, clear } => task::set_due(&mut proj, id, date, clear)?,
             }
             save_project(&path, &proj)
         }

@@ -107,20 +107,8 @@ impl Project {
     /// Recompute next IDs from existing concepts and tasks.
     /// Called after deserialization.
     pub fn recompute_next_ids(&mut self) {
-        self.next_concept_id = self
-            .concepts
-            .iter()
-            .map(|c| c.id.0)
-            .max()
-            .unwrap_or(0)
-            + 1;
-        self.next_task_id = self
-            .tasks
-            .iter()
-            .map(|t| t.id.0)
-            .max()
-            .unwrap_or(0)
-            + 1;
+        self.next_concept_id = self.concepts.iter().map(|c| c.id.0).max().unwrap_or(0) + 1;
+        self.next_task_id = self.tasks.iter().map(|t| t.id.0).max().unwrap_or(0) + 1;
     }
 
     /// Allocate and return the next unused [`ConceptId`].
@@ -154,7 +142,10 @@ impl Project {
 
     /// Return all root concepts (those with no parent).
     pub fn roots(&self) -> Vec<&Concept> {
-        self.concepts.iter().filter(|c| c.parent.is_none()).collect()
+        self.concepts
+            .iter()
+            .filter(|c| c.parent.is_none())
+            .collect()
     }
 
     /// Add a new concept. Returns `Err` if the parent ID doesn't exist.
@@ -197,7 +188,10 @@ impl Project {
             .map(|t| t.id)
             .collect();
         if !referencing_tasks.is_empty() {
-            return Err(ProjectError::ConceptReferencedByTasks(id, referencing_tasks));
+            return Err(ProjectError::ConceptReferencedByTasks(
+                id,
+                referencing_tasks,
+            ));
         }
 
         self.concepts.retain(|c| c.id != id);
@@ -509,7 +503,9 @@ mod tests {
     fn move_concept_prevents_self_parent() {
         let mut p = Project::new();
         p.add_concept("A".into(), None, None).unwrap();
-        let err = p.move_concept(ConceptId(1), Some(ConceptId(1))).unwrap_err();
+        let err = p
+            .move_concept(ConceptId(1), Some(ConceptId(1)))
+            .unwrap_err();
         assert!(matches!(err, ProjectError::ConceptCycleDetected { .. }));
     }
 
@@ -520,7 +516,9 @@ mod tests {
         p.add_concept("B".into(), Some(ConceptId(1)), None).unwrap();
         p.add_concept("C".into(), Some(ConceptId(2)), None).unwrap();
         // Moving A under C would create A->B->C->A cycle
-        let err = p.move_concept(ConceptId(1), Some(ConceptId(3))).unwrap_err();
+        let err = p
+            .move_concept(ConceptId(1), Some(ConceptId(3)))
+            .unwrap_err();
         assert!(matches!(err, ProjectError::ConceptCycleDetected { .. }));
     }
 
@@ -532,7 +530,10 @@ mod tests {
         p.add_concept("C".into(), Some(ConceptId(1)), None).unwrap();
         // Move C from under A to under B
         p.move_concept(ConceptId(3), Some(ConceptId(2))).unwrap();
-        assert_eq!(p.get_concept(ConceptId(3)).unwrap().parent, Some(ConceptId(2)));
+        assert_eq!(
+            p.get_concept(ConceptId(3)).unwrap().parent,
+            Some(ConceptId(2))
+        );
     }
 
     #[test]
@@ -540,8 +541,10 @@ mod tests {
         let mut p = Project::new();
         p.add_concept("R1".into(), None, None).unwrap();
         p.add_concept("R2".into(), None, None).unwrap();
-        p.add_concept("C1".into(), Some(ConceptId(1)), None).unwrap();
-        p.add_concept("C2".into(), Some(ConceptId(1)), None).unwrap();
+        p.add_concept("C1".into(), Some(ConceptId(1)), None)
+            .unwrap();
+        p.add_concept("C2".into(), Some(ConceptId(1)), None)
+            .unwrap();
 
         assert_eq!(p.roots().len(), 2);
         assert_eq!(p.children_of(ConceptId(1)).len(), 2);
@@ -676,7 +679,8 @@ mod tests {
     #[test]
     fn edit_concept_clear_description() {
         let mut p = Project::new();
-        p.add_concept("A".into(), None, Some("old desc".into())).unwrap();
+        p.add_concept("A".into(), None, Some("old desc".into()))
+            .unwrap();
         p.edit_concept(ConceptId(1), None, Some(None)).unwrap();
         assert!(p.get_concept(ConceptId(1)).unwrap().description.is_none());
     }
@@ -684,7 +688,9 @@ mod tests {
     #[test]
     fn edit_concept_not_found() {
         let mut p = Project::new();
-        let err = p.edit_concept(ConceptId(99), Some("X".into()), None).unwrap_err();
+        let err = p
+            .edit_concept(ConceptId(99), Some("X".into()), None)
+            .unwrap_err();
         assert!(matches!(err, ProjectError::ConceptNotFound(_)));
     }
 

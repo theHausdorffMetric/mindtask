@@ -15,8 +15,7 @@ pub fn init(timezone: String) -> Result<()> {
         anyhow::bail!("{} already exists in the current directory", PROJECT_FILE);
     }
 
-    jiff::tz::TimeZone::get(&timezone)
-        .with_context(|| format!("invalid timezone '{timezone}'"))?;
+    jiff::tz::TimeZone::get(&timezone).with_context(|| format!("invalid timezone '{timezone}'"))?;
 
     let mut project = Project::new();
     project.timezone = Some(timezone);

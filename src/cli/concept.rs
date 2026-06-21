@@ -46,7 +46,9 @@ pub fn edit(
     };
 
     if name.is_none() && desc.is_none() {
-        anyhow::bail!("nothing to edit: provide --name and/or --description (or --clear-description)");
+        anyhow::bail!(
+            "nothing to edit: provide --name and/or --description (or --clear-description)"
+        );
     }
 
     project
@@ -88,7 +90,10 @@ pub fn list(project: &Project) {
     for concept in &project.concepts {
         let parent = match concept.parent {
             Some(pid) => {
-                let name = project.get_concept(pid).map(|c| c.name.as_str()).unwrap_or("???");
+                let name = project
+                    .get_concept(pid)
+                    .map(|c| c.name.as_str())
+                    .unwrap_or("???");
                 format!("{name} {{{pid}}}")
             }
             None => "-".to_string(),
@@ -120,7 +125,10 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
 
     let children = project.children_of(id);
     if !children.is_empty() {
-        let child_strs: Vec<String> = children.iter().map(|c| format!("{} {{{}}}", c.name, c.id)).collect();
+        let child_strs: Vec<String> = children
+            .iter()
+            .map(|c| format!("{} {{{}}}", c.name, c.id))
+            .collect();
         println!("Children:    {}", child_strs.join(", "));
     }
 
@@ -322,7 +330,11 @@ pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
     // Preserve project ordering (which is insertion order)
     tasks.sort_by_key(|t| {
         // Direct tasks sort before upstream-only
-        if direct_task_ids.contains(&t.id) { 0 } else { 1 }
+        if direct_task_ids.contains(&t.id) {
+            0
+        } else {
+            1
+        }
     });
 
     println!("\n=== Tasks ===");

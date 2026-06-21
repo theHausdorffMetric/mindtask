@@ -78,8 +78,7 @@ pub fn validate_unique_ids(
 /// - All depends_on references point to existing tasks
 /// - No cycles
 pub fn validate_dag(tasks: &[Task]) -> std::result::Result<(), String> {
-    let task_ids: std::collections::HashSet<TaskId> =
-        tasks.iter().map(|t| t.id).collect();
+    let task_ids: std::collections::HashSet<TaskId> = tasks.iter().map(|t| t.id).collect();
 
     for task in tasks {
         for dep_id in &task.depends_on {
@@ -100,7 +99,9 @@ pub fn validate_dag(tasks: &[Task]) -> std::result::Result<(), String> {
 }
 
 /// Full project validation: unique IDs + tree + DAG + cross-references + timezone.
-pub fn validate_project(project: &crate::model::project::Project) -> std::result::Result<(), String> {
+pub fn validate_project(
+    project: &crate::model::project::Project,
+) -> std::result::Result<(), String> {
     validate_unique_ids(project)?;
     crate::graph::tree::validate_tree(project)?;
     validate_dag(&project.tasks)?;

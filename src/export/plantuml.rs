@@ -142,11 +142,15 @@ pub fn gantt(project: &Project) -> String {
     let tasks_with_due: Vec<&Task> = project.tasks.iter().filter(|t| t.due.is_some()).collect();
 
     // PlantUML requires a project start date before absolute dates work.
-    if let Some(earliest) = tasks_with_due.iter().filter_map(|t| {
-        let due = t.due.as_ref().unwrap();
-        let days = t.duration.unwrap_or(1.0).ceil().max(1.0) as i64;
-        due.checked_sub(jiff::Span::new().days(days)).ok()
-    }).min_by_key(|z| z.timestamp()) {
+    if let Some(earliest) = tasks_with_due
+        .iter()
+        .filter_map(|t| {
+            let due = t.due.as_ref().unwrap();
+            let days = t.duration.unwrap_or(1.0).ceil().max(1.0) as i64;
+            due.checked_sub(jiff::Span::new().days(days)).ok()
+        })
+        .min_by_key(|z| z.timestamp())
+    {
         writeln!(out, "Project starts {}", earliest.date()).unwrap();
     }
 
