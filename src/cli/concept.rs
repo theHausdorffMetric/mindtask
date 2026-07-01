@@ -5,7 +5,7 @@ use termtree::Tree;
 
 use mindtask::model::concept::Concept;
 use mindtask::model::id::{ConceptId, TaskId};
-use mindtask::model::project::Project;
+use mindtask::model::project::{Placement, Project};
 
 use super::render::{MIN_WRAP_WIDTH, hard_wrap, render_table, resolve_wrap_width};
 use super::task::task_cells;
@@ -61,12 +61,38 @@ pub fn edit(
     Ok(())
 }
 
-pub fn mv(project: &mut Project, id: ConceptId, parent_str: &str) -> Result<()> {
-    let new_parent = if parent_str == "root" {
+pub fn mv(
+    project: &mut Project,
+    id: ConceptId,
+    parent: Option<String>,
+    before: Option<ConceptId>,
+    after: Option<ConceptId>,
+) -> Result<()> {
+    // --before/--after position the concept among siblings, taking the parent
+    // from the anchor. They're mutually exclusive with --parent (enforced by
+    // clap), so at most one of these three is set.
+    if let Some(sib) = before {
+        project
+            .move_concept_positioned(id, Placement::Before(sib))
+            .context("failed to move concept")?;
+        println!("Moved concept {id} before {sib}");
+        return Ok(());
+    }
+    if let Some(sib) = after {
+        project
+            .move_concept_positioned(id, Placement::After(sib))
+            .context("failed to move concept")?;
+        println!("Moved concept {id} after {sib}");
+        return Ok(());
+    }
+
+    let parent =
+        parent.ok_or_else(|| anyhow::anyhow!("provide one of --parent, --before, or --after"))?;
+    let new_parent = if parent == "root" {
         None
     } else {
         Some(
-            parent_str
+            parent
                 .parse::<ConceptId>()
                 .context("invalid parent ID (use a concept ID like '1' or 'root')")?,
         )
@@ -79,6 +105,48 @@ pub fn mv(project: &mut Project, id: ConceptId, parent_str: &str) -> Result<()> 
     match new_parent {
         Some(pid) => println!("Moved concept {} under {}", id, pid),
         None => println!("Moved concept {} to root", id),
+    }
+    Ok(())
+}
+
+/// Renumber concept IDs to `1..n` in DFS pre-order — the order `tree` prints —
+/// rewriting parent links and task→concept links. With `dry_run`, print the
+/// planned remap and leave the file untouched.
+pub fn normalize(project: &mut Project, dry_run: bool) -> Result<()> {
+    let plan = project
+        .plan_normalization()
+        .context("failed to plan concept renumbering")?;
+
+    if dry_run {
+        // Whether applying changes anything can't be read from the ID map alone
+        // (the array may need reordering even when IDs are unchanged), so try it
+        // on a throwaway clone and compare.
+        let mut trial = project.clone();
+        trial.apply_normalization(&plan);
+        if trial.concepts == project.concepts {
+            println!("Already normalized; nothing to do.");
+            return Ok(());
+        }
+        println!("Planned renumbering (dry run — no changes written):");
+        for (old, new) in plan.pairs.iter().filter(|(o, n)| o != n) {
+            let name = project
+                .get_concept(*old)
+                .map(|c| c.name.as_str())
+                .unwrap_or("???");
+            println!("  {old} -> {new}  {name}");
+        }
+        return Ok(());
+    }
+
+    let before = project.concepts.clone();
+    project.apply_normalization(&plan);
+    if project.concepts == before {
+        println!("Already normalized; nothing to do.");
+    } else {
+        println!(
+            "Normalized {} concept(s) into tree order.",
+            project.concepts.len()
+        );
     }
     Ok(())
 }

@@ -8,7 +8,7 @@ use super::id::ConceptId;
 ///
 /// Concepts form a tree via the optional [`parent`](Self::parent) field.
 /// A concept with no parent is a root node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Concept {
     /// Unique identifier.
     pub id: ConceptId,

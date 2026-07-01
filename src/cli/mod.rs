@@ -134,13 +134,19 @@ enum ConceptCommand {
         #[arg(long)]
         clear_description: bool,
     },
-    /// Move a concept to a new parent
+    /// Move a concept to a new parent and/or position it among siblings
     Mv {
         /// Concept ID to move (e.g. 1)
         id: ConceptId,
         /// New parent concept ID (e.g. 2), or "root" to make it a root concept
         #[arg(long)]
-        parent: String,
+        parent: Option<String>,
+        /// Place immediately before this sibling (e.g. 3); parent is taken from it
+        #[arg(long, conflicts_with_all = ["parent", "after"])]
+        before: Option<ConceptId>,
+        /// Place immediately after this sibling (e.g. 3); parent is taken from it
+        #[arg(long, conflicts_with = "parent")]
+        after: Option<ConceptId>,
     },
     /// List all concepts
     Ls,
@@ -164,6 +170,12 @@ enum ConceptCommand {
         /// Show concept descriptions below each node in the tree
         #[arg(short, long)]
         description: bool,
+    },
+    /// Renumber concept IDs to 1..n in tree (DFS pre-order) order
+    Normalize {
+        /// Show the planned renumbering without modifying the file
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -376,7 +388,12 @@ pub fn run() -> Result<()> {
                     description,
                     clear_description,
                 } => concept::edit(&mut proj, id, name, description, clear_description)?,
-                ConceptCommand::Mv { id, parent } => concept::mv(&mut proj, id, &parent)?,
+                ConceptCommand::Mv {
+                    id,
+                    parent,
+                    before,
+                    after,
+                } => concept::mv(&mut proj, id, parent, before, after)?,
                 ConceptCommand::Ls => {
                     concept::list(&proj);
                     return Ok(());
@@ -392,6 +409,12 @@ pub fn run() -> Result<()> {
                 ConceptCommand::Report { id, description } => {
                     concept::report(&proj, id, description)?;
                     return Ok(());
+                }
+                ConceptCommand::Normalize { dry_run } => {
+                    concept::normalize(&mut proj, dry_run)?;
+                    if dry_run {
+                        return Ok(());
+                    }
                 }
             }
             save_project(&path, &proj)

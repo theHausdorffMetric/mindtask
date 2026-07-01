@@ -34,13 +34,22 @@ mindtask report [-d|--description]    # Whole project: concept tree + task list
 ```
 mindtask concept add <NAME> [--parent <ID>] [--description <DESC>]
 mindtask concept rm <ID>
-mindtask concept mv <ID> --parent <ID|root>
+mindtask concept mv <ID> --parent <ID|root>          # Re-parent (append to new parent's children)
+mindtask concept mv <ID> --before <SIB> | --after <SIB> # Position among siblings (parent taken from SIB)
 mindtask concept edit <ID> [--name <NAME>] [--description <DESC>] [--clear-description]
 mindtask concept ls
 mindtask concept tree [ID] [-d]       # Full tree (or subtree); -d adds descriptions
 mindtask concept show <ID>
 mindtask concept report <ID> [-d]     # Subtree + linked tasks + upstream deps; -d adds descriptions
+mindtask concept normalize [--dry-run] # Renumber IDs to 1..n in tree (DFS pre-order) order
 ```
+
+Concepts print in file (array) order, not by ID. `normalize` rewrites the file
+so IDs run `1..n` in the exact order `tree` prints (each parent immediately
+followed by its subtree), remapping `parent` links and task→concept links in
+step; task dependencies are untouched. It's an on-demand tidy — run it after
+hand-reordering the file or moving concepts around. `--dry-run` shows the
+planned old→new mapping without writing.
 
 ### Tasks (DAG structure)
 

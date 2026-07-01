@@ -53,6 +53,54 @@ pub enum ProjectError {
     /// Attempted to unlink a concept that the task is not linked to.
     #[error("task {0} is not linked to concept {1}")]
     ConceptNotLinked(TaskId, ConceptId),
+    /// Some concepts are unreachable from any root (a cycle or orphaned parent
+    /// chain), so a canonical renumbering cannot cover them.
+    #[error("cannot normalize: {0} concept(s) unreachable from any root")]
+    UnreachableConcepts(usize),
+    /// Attempted to position a concept relative to itself.
+    #[error("cannot position concept {0} relative to itself")]
+    SelfPlacement(ConceptId),
+}
+
+/// Where to place a concept among its target parent's children when moving it.
+/// The target parent is inferred from the anchor sibling, so the moved concept
+/// always lands in the same sibling group as the anchor.
+#[derive(Debug, Clone, Copy)]
+pub enum Placement {
+    /// Immediately before the anchor sibling.
+    Before(ConceptId),
+    /// Immediately after the anchor sibling.
+    After(ConceptId),
+}
+
+impl Placement {
+    /// The anchor sibling the placement is relative to.
+    fn anchor(&self) -> ConceptId {
+        match self {
+            Placement::Before(a) | Placement::After(a) => *a,
+        }
+    }
+}
+
+/// A planned renumbering of concept IDs: `(old_id, new_id)` pairs ordered by the
+/// new ID (`1..=n`, i.e. DFS pre-order). Produced by
+/// [`Project::plan_normalization`] and consumed by
+/// [`Project::apply_normalization`]; keeping the two apart lets `--dry-run`
+/// inspect the plan without mutating anything.
+#[derive(Debug, Clone)]
+pub struct Renumbering {
+    /// `(old_id, new_id)` for every concept, in new-ID order.
+    pub pairs: Vec<(ConceptId, ConceptId)>,
+}
+
+impl Renumbering {
+    /// True when every concept already holds its canonical ID (the ID mapping is
+    /// the identity). Note this does not by itself imply the file is unchanged —
+    /// the array may still need reordering — so callers detecting "no-op" should
+    /// compare the resulting concepts, not rely on this alone.
+    pub fn is_identity(&self) -> bool {
+        self.pairs.iter().all(|(old, new)| old == new)
+    }
 }
 
 /// Convenience alias for results from project operations.
@@ -146,6 +194,86 @@ impl Project {
             .iter()
             .filter(|c| c.parent.is_none())
             .collect()
+    }
+
+    /// Concept IDs in DFS pre-order: roots in array order, each immediately
+    /// followed by its subtree (children in array order), recursively.
+    ///
+    /// This is the canonical concept ordering used by `normalize`: it matches
+    /// the order `mindtask tree` prints. Over a well-formed tree the result
+    /// covers every concept exactly once; the `visited` guard keeps it
+    /// terminating even on cyclic in-memory data (well-formed data has none,
+    /// but callers may hold unvalidated input).
+    pub fn dfs_preorder_ids(&self) -> Vec<ConceptId> {
+        let mut out = Vec::with_capacity(self.concepts.len());
+        let mut visited = std::collections::HashSet::new();
+        // Seed the stack with roots reversed so they pop in array order.
+        let mut stack: Vec<ConceptId> = self.roots().iter().rev().map(|c| c.id).collect();
+        while let Some(id) = stack.pop() {
+            if !visited.insert(id) {
+                continue;
+            }
+            out.push(id);
+            // Push children reversed so they pop in array order.
+            for child in self.children_of(id).iter().rev() {
+                stack.push(child.id);
+            }
+        }
+        out
+    }
+
+    /// Plan a canonical renumbering: assign IDs `1..=n` in DFS pre-order.
+    ///
+    /// Pure — does not mutate. Errors only when some concepts are unreachable
+    /// from any root (a cycle or orphaned parent chain), which validated data
+    /// never has; this defensive guard stops [`apply_normalization`] from
+    /// silently dropping concepts if handed a malformed tree.
+    pub fn plan_normalization(&self) -> Result<Renumbering> {
+        let order = self.dfs_preorder_ids();
+        if order.len() != self.concepts.len() {
+            return Err(ProjectError::UnreachableConcepts(
+                self.concepts.len() - order.len(),
+            ));
+        }
+        let pairs = order
+            .into_iter()
+            .enumerate()
+            .map(|(i, old)| (old, ConceptId(i as u64 + 1)))
+            .collect();
+        Ok(Renumbering { pairs })
+    }
+
+    /// Apply a [`Renumbering`]: reorder the `concepts` vector into the plan's
+    /// (DFS pre-order) order, relabel each concept's ID, and rewrite every
+    /// reference to a concept ID — `concept.parent` and each task's `concepts`
+    /// links. Task dependencies (task→task) are untouched. ID counters are
+    /// recomputed afterward.
+    pub fn apply_normalization(&mut self, plan: &Renumbering) {
+        let map: std::collections::HashMap<ConceptId, ConceptId> =
+            plan.pairs.iter().copied().collect();
+        self.concepts = plan
+            .pairs
+            .iter()
+            .map(|(old, new)| {
+                let c = self
+                    .get_concept(*old)
+                    .expect("renumbering plan references an existing concept");
+                Concept {
+                    id: *new,
+                    name: c.name.clone(),
+                    description: c.description.clone(),
+                    parent: c.parent.map(|p| map[&p]),
+                }
+            })
+            .collect();
+        for task in &mut self.tasks {
+            for cid in &mut task.concepts {
+                if let Some(new) = map.get(cid) {
+                    *cid = *new;
+                }
+            }
+        }
+        self.recompute_next_ids();
     }
 
     /// Add a new concept. Returns `Err` if the parent ID doesn't exist.
@@ -245,6 +373,51 @@ impl Project {
 
         let concept = self.concepts.iter_mut().find(|c| c.id == id).unwrap();
         concept.parent = new_parent;
+        Ok(())
+    }
+
+    /// Re-parent a concept *and* position it among its new siblings by moving
+    /// its element within the `concepts` vector (sibling order is array order).
+    ///
+    /// The new parent is taken from the anchor sibling, so the moved concept
+    /// joins the anchor's sibling group. Returns `Err` if `id` or the anchor is
+    /// missing, if the anchor is `id` itself, or if the move would create a
+    /// cycle (same guard as [`move_concept`]).
+    pub fn move_concept_positioned(&mut self, id: ConceptId, placement: Placement) -> Result<()> {
+        let anchor = placement.anchor();
+        if self.get_concept(id).is_none() {
+            return Err(ProjectError::ConceptNotFound(id));
+        }
+        if anchor == id {
+            return Err(ProjectError::SelfPlacement(id));
+        }
+        let new_parent = self
+            .get_concept(anchor)
+            .ok_or(ProjectError::ConceptNotFound(anchor))?
+            .parent;
+
+        // Same cycle guard as move_concept: the new parent can't be the concept
+        // itself or one of its descendants.
+        if let Some(pid) = new_parent
+            && (pid == id || crate::graph::tree::is_ancestor(self, id, pid))
+        {
+            return Err(ProjectError::ConceptCycleDetected {
+                id,
+                new_parent: pid,
+            });
+        }
+
+        // Pull the moving element out, re-parent it, and reinsert it relative to
+        // the anchor's position in the now-shortened vector.
+        let idx = self.concepts.iter().position(|c| c.id == id).unwrap();
+        let mut elem = self.concepts.remove(idx);
+        elem.parent = new_parent;
+        let anchor_idx = self.concepts.iter().position(|c| c.id == anchor).unwrap();
+        let insert_at = match placement {
+            Placement::Before(_) => anchor_idx,
+            Placement::After(_) => anchor_idx + 1,
+        };
+        self.concepts.insert(insert_at, elem);
         Ok(())
     }
 
@@ -549,6 +722,256 @@ mod tests {
         assert_eq!(p.roots().len(), 2);
         assert_eq!(p.children_of(ConceptId(1)).len(), 2);
         assert_eq!(p.children_of(ConceptId(2)).len(), 0);
+    }
+
+    // --- DFS pre-order tests ---
+
+    /// Collect concept IDs as plain u64s for terse assertions.
+    fn ids(p: &Project) -> Vec<u64> {
+        p.dfs_preorder_ids().iter().map(|c| c.0).collect()
+    }
+
+    #[test]
+    fn dfs_preorder_single_chain() {
+        let mut p = Project::new();
+        p.add_concept("root".into(), None, None).unwrap(); // 1
+        p.add_concept("child".into(), Some(ConceptId(1)), None)
+            .unwrap(); // 2
+        p.add_concept("grandchild".into(), Some(ConceptId(2)), None)
+            .unwrap(); // 3
+        assert_eq!(ids(&p), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn dfs_preorder_subtree_before_next_root() {
+        let mut p = Project::new();
+        p.add_concept("R1".into(), None, None).unwrap(); // 1
+        p.add_concept("R2".into(), None, None).unwrap(); // 2
+        p.add_concept("R1a".into(), Some(ConceptId(1)), None)
+            .unwrap(); // 3
+        p.add_concept("R1b".into(), Some(ConceptId(1)), None)
+            .unwrap(); // 4
+        p.add_concept("R2a".into(), Some(ConceptId(2)), None)
+            .unwrap(); // 5
+        // Pre-order: R1, its subtree (3,4), then R2, its subtree (5).
+        assert_eq!(ids(&p), vec![1, 3, 4, 2, 5]);
+    }
+
+    #[test]
+    fn dfs_preorder_follows_array_order_not_id_order() {
+        // Force array order to diverge from ascending ID by constructing the
+        // vector directly (the CLI can't yet — allocation is monotonic — but a
+        // hand-edited file or positional `mv` can). Siblings sit as 3 then 1.
+        let mut p = Project::new();
+        let c = |id: u64, parent: Option<u64>| Concept {
+            id: ConceptId(id),
+            name: format!("c{id}"),
+            description: None,
+            parent: parent.map(ConceptId),
+        };
+        p.concepts.push(c(10, None));
+        p.concepts.push(c(3, Some(10)));
+        p.concepts.push(c(1, Some(10)));
+        p.recompute_next_ids();
+        // Siblings render in array order: 3 before 1, NOT ascending ID.
+        assert_eq!(ids(&p), vec![10, 3, 1]);
+        assert_eq!(ids(&p).len(), p.concepts.len());
+    }
+
+    // --- Normalization tests ---
+
+    /// A deliberately non-canonical project: gappy IDs, a subtree stored
+    /// non-contiguously (concept 9 is a child of 2 but sits after sibling 7),
+    /// and a task linked to two concepts.
+    ///
+    /// Tree:  5(root) → { 2 → {9}, 7 }.  Array order: [5, 2, 7, 9].
+    /// DFS pre-order is therefore [5, 2, 9, 7] — different from the array.
+    fn scrambled_project() -> Project {
+        let mut p = Project::new();
+        let c = |id: u64, parent: Option<u64>| Concept {
+            id: ConceptId(id),
+            name: format!("c{id}"),
+            description: None,
+            parent: parent.map(ConceptId),
+        };
+        p.concepts.push(c(5, None));
+        p.concepts.push(c(2, Some(5)));
+        p.concepts.push(c(7, Some(5)));
+        p.concepts.push(c(9, Some(2)));
+        p.recompute_next_ids();
+        let t = p.add_task("t".into(), None, None, None);
+        p.get_task_mut(t).unwrap().concepts = vec![ConceptId(9), ConceptId(5)];
+        p
+    }
+
+    #[test]
+    fn normalize_renumbers_to_dfs_and_remaps_refs() {
+        let mut p = scrambled_project();
+        let plan = p.plan_normalization().unwrap();
+        assert_eq!(
+            plan.pairs,
+            vec![
+                (ConceptId(5), ConceptId(1)),
+                (ConceptId(2), ConceptId(2)),
+                (ConceptId(9), ConceptId(3)),
+                (ConceptId(7), ConceptId(4)),
+            ]
+        );
+        p.apply_normalization(&plan);
+
+        // Array is now DFS pre-order with consecutive IDs 1..4, and the vector
+        // was genuinely reordered: old c9 now precedes old c7.
+        let array: Vec<(u64, &str)> = p
+            .concepts
+            .iter()
+            .map(|c| (c.id.0, c.name.as_str()))
+            .collect();
+        assert_eq!(array, vec![(1, "c5"), (2, "c2"), (3, "c9"), (4, "c7")]);
+        // Parents remapped: c2's parent 5→1; c9's parent 2→2; c7's parent 5→1.
+        assert_eq!(
+            p.get_concept(ConceptId(2)).unwrap().parent,
+            Some(ConceptId(1))
+        );
+        assert_eq!(
+            p.get_concept(ConceptId(3)).unwrap().parent,
+            Some(ConceptId(2))
+        );
+        assert_eq!(
+            p.get_concept(ConceptId(4)).unwrap().parent,
+            Some(ConceptId(1))
+        );
+        // Task links remapped: 9→3, 5→1 (order preserved).
+        assert_eq!(p.tasks[0].concepts, vec![ConceptId(3), ConceptId(1)]);
+        // Structure stays valid; counter advanced to n+1.
+        assert!(crate::graph::tree::validate_tree(&p).is_ok());
+        assert_eq!(p.next_concept_id, 5);
+    }
+
+    #[test]
+    fn normalize_is_idempotent() {
+        let mut p = scrambled_project();
+        let plan = p.plan_normalization().unwrap();
+        p.apply_normalization(&plan);
+        let once = p.concepts.clone();
+        let links_once: Vec<_> = p.tasks.iter().map(|t| t.concepts.clone()).collect();
+
+        let plan2 = p.plan_normalization().unwrap();
+        assert!(plan2.is_identity());
+        p.apply_normalization(&plan2);
+        assert_eq!(p.concepts, once);
+        let links_twice: Vec<_> = p.tasks.iter().map(|t| t.concepts.clone()).collect();
+        assert_eq!(links_once, links_twice);
+    }
+
+    #[test]
+    fn normalize_noop_on_already_canonical() {
+        // Built via the normal API => already canonical (monotonic IDs, append).
+        let mut p = Project::new();
+        p.add_concept("root".into(), None, None).unwrap();
+        p.add_concept("child".into(), Some(ConceptId(1)), None)
+            .unwrap();
+        p.add_concept("grandchild".into(), Some(ConceptId(2)), None)
+            .unwrap();
+        let before = p.concepts.clone();
+        let plan = p.plan_normalization().unwrap();
+        assert!(plan.is_identity());
+        p.apply_normalization(&plan);
+        assert_eq!(p.concepts, before);
+    }
+
+    #[test]
+    fn normalize_leaves_task_dependencies_untouched() {
+        let mut p = scrambled_project();
+        let t2 = p.add_task("t2".into(), None, None, None);
+        let t1 = p.tasks[0].id;
+        p.get_task_mut(t2).unwrap().depends_on = vec![t1];
+        let deps_before: Vec<_> = p.tasks.iter().map(|t| t.depends_on.clone()).collect();
+
+        let plan = p.plan_normalization().unwrap();
+        p.apply_normalization(&plan);
+
+        let deps_after: Vec<_> = p.tasks.iter().map(|t| t.depends_on.clone()).collect();
+        assert_eq!(deps_before, deps_after);
+    }
+
+    // --- Positional move tests ---
+
+    /// root 1 → {a=2, b=3, c=4}; second root root2=5.
+    fn forest() -> Project {
+        let mut p = Project::new();
+        p.add_concept("root".into(), None, None).unwrap();
+        p.add_concept("a".into(), Some(ConceptId(1)), None).unwrap();
+        p.add_concept("b".into(), Some(ConceptId(1)), None).unwrap();
+        p.add_concept("c".into(), Some(ConceptId(1)), None).unwrap();
+        p.add_concept("root2".into(), None, None).unwrap();
+        p
+    }
+
+    fn child_order(p: &Project, parent: u64) -> Vec<u64> {
+        p.children_of(ConceptId(parent))
+            .iter()
+            .map(|c| c.id.0)
+            .collect()
+    }
+
+    #[test]
+    fn move_before_reorders_siblings() {
+        let mut p = forest();
+        // c(4) before a(2): [2,3,4] -> [4,2,3]; 2 and 3 keep relative order.
+        p.move_concept_positioned(ConceptId(4), Placement::Before(ConceptId(2)))
+            .unwrap();
+        assert_eq!(child_order(&p, 1), vec![4, 2, 3]);
+    }
+
+    #[test]
+    fn move_after_reorders_siblings() {
+        let mut p = forest();
+        // a(2) after b(3): [2,3,4] -> [3,2,4].
+        p.move_concept_positioned(ConceptId(2), Placement::After(ConceptId(3)))
+            .unwrap();
+        assert_eq!(child_order(&p, 1), vec![3, 2, 4]);
+    }
+
+    #[test]
+    fn move_positioned_across_parents_reparents() {
+        let mut p = forest();
+        // a(2) before root2(5): 2 becomes a root, ordered before 5.
+        p.move_concept_positioned(ConceptId(2), Placement::Before(ConceptId(5)))
+            .unwrap();
+        assert_eq!(p.get_concept(ConceptId(2)).unwrap().parent, None);
+        let roots: Vec<u64> = p.roots().iter().map(|c| c.id.0).collect();
+        assert_eq!(roots, vec![1, 2, 5]);
+        assert_eq!(child_order(&p, 1), vec![3, 4]); // 1 lost child 2
+    }
+
+    #[test]
+    fn move_positioned_rejects_self_anchor() {
+        let mut p = forest();
+        assert!(matches!(
+            p.move_concept_positioned(ConceptId(2), Placement::Before(ConceptId(2))),
+            Err(ProjectError::SelfPlacement(_))
+        ));
+    }
+
+    #[test]
+    fn move_positioned_rejects_missing_anchor() {
+        let mut p = forest();
+        assert!(matches!(
+            p.move_concept_positioned(ConceptId(2), Placement::After(ConceptId(99))),
+            Err(ProjectError::ConceptNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn move_positioned_rejects_cycle() {
+        let mut p = forest();
+        p.add_concept("a-child".into(), Some(ConceptId(2)), None)
+            .unwrap(); // 6, child of a(2)
+        // Moving root(1) beside 6 would make 1 a child of 2 (6's parent) — a cycle.
+        assert!(matches!(
+            p.move_concept_positioned(ConceptId(1), Placement::Before(ConceptId(6))),
+            Err(ProjectError::ConceptCycleDetected { .. })
+        ));
     }
 
     // --- Task CRUD tests ---

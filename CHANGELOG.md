@@ -15,6 +15,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   when tasks have dependencies it positions them by the computed schedule
   (relative days) and highlights the critical path, falling back to the
   due-date chart when there are no dependencies.
+- `mindtask concept normalize` renumbers concept IDs to `1..n` in tree
+  (DFS pre-order) order — the order `concept tree` prints — reordering the file
+  to match and remapping `parent` and task→concept links in step (task
+  dependencies are untouched). It's an on-demand tidy after reordering the tree;
+  `--dry-run` shows the planned old→new mapping without writing.
+- `mindtask concept mv` gained `--before <SIB>` / `--after <SIB>` to position a
+  concept among its siblings (taking the new parent from the anchor), since
+  sibling order follows file order. The existing `--parent` form is unchanged.
 
 ## [0.4.1] - 2026-06-21
 
