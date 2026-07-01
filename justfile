@@ -15,6 +15,10 @@ build:
 test:
     cargo test
 
+# Check SKILL.md documents every CLI command and matches the crate version
+test-skill-doc:
+    cargo test --test skill_doc_sync
+
 # Generate the sample JSON fixture from scratch
 create-fixture: build
     bash tests/fixtures/generate.sh

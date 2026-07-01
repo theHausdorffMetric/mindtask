@@ -6,6 +6,11 @@ description: >
   "show the concept tree", "export a diagram", or any project planning activity
   involving mindtask.
 allowed-tools: Bash(mindtask *)
+metadata:
+  # Crate version this reference was last verified against. The
+  # `skill_doc_sync` integration test fails on release if this drifts
+  # from Cargo.toml — bump it here when cutting a new mindtask version.
+  documents-version: "0.4.1"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
@@ -59,6 +64,18 @@ mindtask depend rm <TASK_ID> <DEPENDS_ON>
 ```
 
 The first argument is the task that **has** the dependency; the second is the task that must finish first.
+
+### Schedule (critical path)
+
+```
+mindtask schedule [--critical]        # Earliest start/finish, slack, critical path, project duration
+```
+
+Computes a Critical Path Method (CPM) schedule from task durations and
+dependencies: each task's earliest start/finish and slack, the critical path,
+and the overall project duration. `--critical` restricts output to the tasks on
+the critical path. The PlantUML Gantt export (`export plantuml gantt`) is
+schedule-driven off the same computation when tasks have dependencies.
 
 ### Linking (task <-> concept)
 
