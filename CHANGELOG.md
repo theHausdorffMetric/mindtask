@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-01
+
 ### Added
 - Critical Path Method (CPM) scheduling. `mindtask schedule` prints each task's
   earliest start/finish and slack, flags the critical path, and reports the

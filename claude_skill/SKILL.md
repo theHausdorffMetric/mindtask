@@ -10,7 +10,7 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.4.1"
+  documents-version: "0.5.0"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
