@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-07-01
+
+### Changed
+- The default `.mindtask.json` lookup no longer walks up into parent
+  directories — it resolves the file in the current directory only. Use
+  `--file <PATH>` to operate on a project elsewhere. This avoids accidentally
+  operating on an ancestor project from a subdirectory.
+
 ## [0.5.0] - 2026-07-01
 
 ### Added

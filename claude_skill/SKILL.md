@@ -10,12 +10,12 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.5.0"
+  documents-version: "0.5.1"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
 
-mindtask stores everything in a single `.mindtask.json` file, searched for in the current directory and its parents. Any command accepts a global `-f`/`--file <PATH>` flag to target a specific project file instead.
+mindtask stores everything in a single `.mindtask.json` file in the current directory (the lookup does not walk up into parent directories). Any command accepts a global `-f`/`--file <PATH>` flag to target a specific project file instead.
 
 ## Command reference
 

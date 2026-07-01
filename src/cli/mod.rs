@@ -26,8 +26,8 @@ const DEFAULT_TIMEZONE: &str = "Europe/Zurich";
     version
 )]
 pub struct Cli {
-    /// Path to the project file to operate on, bypassing the search for
-    /// `.mindtask.json` in the current directory and its parents
+    /// Path to the project file to operate on, instead of `.mindtask.json`
+    /// in the current directory
     #[arg(short = 'f', long = "file", global = true, value_name = "PATH")]
     file: Option<PathBuf>,
 
@@ -290,10 +290,9 @@ enum ConfigCommand {
     },
 }
 
-/// Find the project file by walking up from the current directory.
 /// Resolve the project file to use: an explicit `--file` override if given
-/// (which must exist), otherwise the nearest `.mindtask.json` by walking up
-/// from the current directory.
+/// (which must exist), otherwise `.mindtask.json` in the current directory.
+/// The lookup does not walk up into parent directories.
 fn resolve_project_file(override_path: Option<&Path>) -> Result<PathBuf> {
     match override_path {
         Some(p) => {
@@ -307,20 +306,18 @@ fn resolve_project_file(override_path: Option<&Path>) -> Result<PathBuf> {
     }
 }
 
+/// Look for `.mindtask.json` in the current directory only (no parent walk).
 fn find_project_file() -> Result<PathBuf> {
-    let mut dir = std::env::current_dir().context("cannot determine current directory")?;
-    loop {
-        let candidate = dir.join(PROJECT_FILE);
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-        if !dir.pop() {
-            anyhow::bail!(
-                "no {} found in current directory or any parent directory\n\
-                 Run 'mindtask init' to create a new project.",
-                PROJECT_FILE
-            );
-        }
+    let dir = std::env::current_dir().context("cannot determine current directory")?;
+    let candidate = dir.join(PROJECT_FILE);
+    if candidate.exists() {
+        Ok(candidate)
+    } else {
+        anyhow::bail!(
+            "no {} found in the current directory\n\
+             Run 'mindtask init' to create a new project, or pass --file <PATH>.",
+            PROJECT_FILE
+        );
     }
 }
 

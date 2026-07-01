@@ -54,7 +54,7 @@ mindtask task state 1 done
 mindtask task ls
 ```
 
-Data is stored in `.mindtask.json` in the current directory — human-readable, versionable with git. The CLI walks up parent directories to find the project file, so you can run commands from subdirectories. Pass `-f`/`--file <PATH>` (a global flag on any command) to operate on a specific project file instead, bypassing the directory search.
+Data is stored in `.mindtask.json` in the current directory — human-readable, versionable with git. The CLI looks for the project file in the current directory only (it does not walk up into parent directories). Pass `-f`/`--file <PATH>` (a global flag on any command) to operate on a specific project file instead.
 
 ## CLI Reference
 
@@ -80,14 +80,18 @@ Concepts form a tree (each concept has at most one parent).
 mindtask concept add <NAME> [--parent <ID>] [--description <TEXT>]
 mindtask concept edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-description]
 mindtask concept rm <ID>
-mindtask concept mv <ID> --parent <ID|root>
+mindtask concept mv <ID> --parent <ID|root>          # Re-parent (append to new parent's children)
+mindtask concept mv <ID> --before <SIB>|--after <SIB> # Position among siblings (parent taken from SIB)
 mindtask concept ls
 mindtask concept tree [<ID>] [-d|--description]
 mindtask concept show <ID>
 mindtask concept report <ID> [-d|--description]
+mindtask concept normalize [--dry-run]               # Renumber IDs to 1..n in tree (DFS pre-order) order
 ```
 
 Removing a concept fails if it has children or is referenced by tasks — unlink or remove dependents first.
+
+Concepts print in file (array) order, not by ID. Sibling order therefore follows the file: `concept mv --before/--after` repositions a concept among siblings (taking the new parent from the anchor), and `concept normalize` rewrites IDs to `1..n` in the exact order `tree` prints — remapping `parent` and task→concept links in step — as an on-demand tidy after reordering. `--dry-run` previews the old→new mapping without writing.
 
 Pass `-d`/`--description` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches. Long descriptions are hard-wrapped to fit the available width, which follows the terminal (falling back to 80 columns when the width is unknown, e.g. piped output). Set a fixed width with `config wrap-width <COLS>` to override detection, or `config wrap-width --clear` to go back to auto-detection.
 
