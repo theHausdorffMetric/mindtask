@@ -226,7 +226,7 @@ impl Project {
     ///
     /// Pure — does not mutate. Errors only when some concepts are unreachable
     /// from any root (a cycle or orphaned parent chain), which validated data
-    /// never has; this defensive guard stops [`apply_normalization`] from
+    /// never has; this defensive guard stops [`Self::apply_normalization`] from
     /// silently dropping concepts if handed a malformed tree.
     pub fn plan_normalization(&self) -> Result<Renumbering> {
         let order = self.dfs_preorder_ids();
@@ -382,7 +382,7 @@ impl Project {
     /// The new parent is taken from the anchor sibling, so the moved concept
     /// joins the anchor's sibling group. Returns `Err` if `id` or the anchor is
     /// missing, if the anchor is `id` itself, or if the move would create a
-    /// cycle (same guard as [`move_concept`]).
+    /// cycle (same guard as [`Self::move_concept`]).
     pub fn move_concept_positioned(&mut self, id: ConceptId, placement: Placement) -> Result<()> {
         let anchor = placement.anchor();
         if self.get_concept(id).is_none() {

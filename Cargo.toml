@@ -9,7 +9,7 @@ readme = "README.md"
 repository = "https://git.sr.ht/~danprobst/mindtask"
 keywords = ["cli", "mindmap", "task", "dag", "planning"]
 categories = ["command-line-utilities"]
-exclude = ["docs/", "STATUS.md", "CODE_REVIEW.md", "justfile", "tests/fixtures/", "claude_skill/"]
+exclude = ["docs/", "STATUS.md", "CODE_REVIEW.md", "justfile", "tests/fixtures/", "claude_skill/", "tests/skill_doc_sync.rs"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
