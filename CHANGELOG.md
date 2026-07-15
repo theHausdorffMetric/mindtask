@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- `export plantuml wbs <CONCEPT_ID>` renders only the WBS subtree rooted at
+  that concept (the "Unlinked" group is omitted). Previously the root argument
+  was silently ignored for `wbs`.
+
+### Fixed
+- `export … gantt <ROOT>` and `export … wbs <ROOT>` no longer silently ignore
+  the root argument (CODE_REVIEW C4): `wbs` validates it as a concept ID and
+  honors it; `gantt` rejects a supplied root with an error.
+
 ## [0.5.1] - 2026-07-01
 
 ### Changed

@@ -54,7 +54,12 @@ load silently. Only the explicit `validate` command catches them (and C1 can
 hang first). Consider validating on load, or document that mutation commands
 assume a valid file.
 
-### C4. `export gantt`/`wbs` silently ignore (and never validate) `root`
+### C4. `export gantt`/`wbs` silently ignore (and never validate) `root` — ✅ FIXED
+`wbs` now parses+validates `root` as a concept ID and renders only that subtree
+(omitting the "Unlinked" group); `gantt` rejects a supplied root with an error
+in `render` (it applies to both formats). Docs aligned (README table/examples,
+CLI help, `render` doc comment); tests cover subtree, validation, and rejection.
+
 `render_plantuml`/`render_mermaid` parse+validate `root` for `tree`/`dag` but
 pass nothing for `gantt`/`wbs` (`src/export/mod.rs:141-142,160-161`). So
 `mindtask export plantuml gantt 999` succeeds, ignoring `999` — yet `render`'s

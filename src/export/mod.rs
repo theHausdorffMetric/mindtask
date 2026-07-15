@@ -82,13 +82,17 @@ impl FromStr for DiagramKind {
 /// Render a diagram from project data.
 ///
 /// `root` is an optional ID string: parsed as [`ConceptId`] for tree/wbs diagrams,
-/// or [`TaskId`] for dag/gantt diagrams.
+/// or [`TaskId`] for dag diagrams. Gantt diagrams always cover the whole
+/// project; supplying a root for them is an error.
 pub fn render(
     project: &Project,
     format: Format,
     kind: DiagramKind,
     root: Option<&str>,
 ) -> Result<String, String> {
+    if kind == DiagramKind::Gantt && root.is_some() {
+        return Err("gantt diagrams do not take a root ID".to_string());
+    }
     match format {
         Format::PlantUml => render_plantuml(project, kind, root),
         Format::Mermaid => render_mermaid(project, kind, root),
@@ -136,7 +140,10 @@ fn render_plantuml(
             Ok(plantuml::dag(project, root_id))
         }
         DiagramKind::Gantt => Ok(plantuml::gantt(project)),
-        DiagramKind::Wbs => Ok(plantuml::wbs(project)),
+        DiagramKind::Wbs => {
+            let root_id = parse_concept_root(project, root)?;
+            Ok(plantuml::wbs(project, root_id))
+        }
     }
 }
 
@@ -155,6 +162,48 @@ fn render_mermaid(
             Ok(mermaid::dag(project, root_id))
         }
         DiagramKind::Gantt => Ok(mermaid::gantt(project)),
-        DiagramKind::Wbs => Ok(mermaid::wbs(project)),
+        DiagramKind::Wbs => {
+            let root_id = parse_concept_root(project, root)?;
+            Ok(mermaid::wbs(project, root_id))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_project() -> Project {
+        let mut p = Project::new();
+        p.add_concept("Backend".into(), None, None).unwrap();
+        p.add_concept("Frontend".into(), None, None).unwrap();
+        p.add_task("Build API".into(), None, None, None);
+        p.link_concept(TaskId(1), ConceptId(1)).unwrap();
+        p
+    }
+
+    #[test]
+    fn gantt_rejects_root() {
+        let p = sample_project();
+        for format in [Format::PlantUml, Format::Mermaid] {
+            let err = render(&p, format, DiagramKind::Gantt, Some("1")).unwrap_err();
+            assert!(err.contains("gantt"), "{err}");
+        }
+    }
+
+    #[test]
+    fn wbs_validates_root() {
+        let p = sample_project();
+        let err = render(&p, Format::PlantUml, DiagramKind::Wbs, Some("999")).unwrap_err();
+        assert!(err.contains("not found"), "{err}");
+    }
+
+    #[test]
+    fn wbs_honors_root() {
+        let p = sample_project();
+        let out = render(&p, Format::PlantUml, DiagramKind::Wbs, Some("1")).unwrap();
+        assert!(out.contains("Backend"), "{out}");
+        assert!(out.contains("Build API"), "{out}");
+        assert!(!out.contains("Frontend"), "{out}");
     }
 }

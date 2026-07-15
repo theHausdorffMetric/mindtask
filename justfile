@@ -37,6 +37,7 @@ render: build
     "$BIN" export plantuml dag 1  > dag-from-1.puml
     "$BIN" export plantuml gantt  > gantt.puml
     "$BIN" export plantuml wbs    > wbs.puml
+    "$BIN" export plantuml wbs 1  > wbs-backend.puml
     rm .mindtask.json
     echo "Wrote PlantUML files to {{ out_dir }}/"
     ls -1 *.puml

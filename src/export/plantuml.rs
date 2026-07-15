@@ -258,7 +258,11 @@ fn gantt_due(project: &Project) -> String {
 ///
 /// Tasks linked to multiple concepts appear under each. Unlinked tasks are
 /// grouped under a separate "Unlinked" node.
-pub fn wbs(project: &Project) -> String {
+///
+/// If `root_id` is given, only the subtree rooted at that concept is rendered
+/// (the "Unlinked" group is omitted — those tasks belong to no subtree).
+/// The caller must ensure the concept exists.
+pub fn wbs(project: &Project, root_id: Option<ConceptId>) -> String {
     let mut out = String::from("@startwbs\n");
 
     // Build map: concept_id -> tasks linked to it
@@ -272,24 +276,32 @@ pub fn wbs(project: &Project) -> String {
         }
     }
 
-    let roots = project.roots();
-    let unlinked: Vec<&Task> = project
-        .tasks
-        .iter()
-        .filter(|t| !linked_task_ids.contains(&t.id))
-        .collect();
-
-    if roots.len() == 1 && unlinked.is_empty() {
-        write_wbs_concept(&mut out, project, roots[0], &concept_tasks, 1);
-    } else if !roots.is_empty() || !unlinked.is_empty() {
-        writeln!(out, "* Project").unwrap();
-        for root in &roots {
-            write_wbs_concept(&mut out, project, root, &concept_tasks, 2);
+    match root_id {
+        Some(id) => {
+            let concept = project.get_concept(id).expect("caller validated existence");
+            write_wbs_concept(&mut out, project, concept, &concept_tasks, 1);
         }
-        if !unlinked.is_empty() {
-            writeln!(out, "** Unlinked").unwrap();
-            for task in &unlinked {
-                writeln!(out, "*** {}", task.name).unwrap();
+        None => {
+            let roots = project.roots();
+            let unlinked: Vec<&Task> = project
+                .tasks
+                .iter()
+                .filter(|t| !linked_task_ids.contains(&t.id))
+                .collect();
+
+            if roots.len() == 1 && unlinked.is_empty() {
+                write_wbs_concept(&mut out, project, roots[0], &concept_tasks, 1);
+            } else if !roots.is_empty() || !unlinked.is_empty() {
+                writeln!(out, "* Project").unwrap();
+                for root in &roots {
+                    write_wbs_concept(&mut out, project, root, &concept_tasks, 2);
+                }
+                if !unlinked.is_empty() {
+                    writeln!(out, "** Unlinked").unwrap();
+                    for task in &unlinked {
+                        writeln!(out, "*** {}", task.name).unwrap();
+                    }
+                }
             }
         }
     }
@@ -531,7 +543,7 @@ mod tests {
     #[test]
     fn wbs_full() {
         let p = sample_project();
-        let output = wbs(&p);
+        let output = wbs(&p, None);
         assert!(output.starts_with("@startwbs\n"));
         assert!(output.ends_with("@endwbs\n"));
         assert!(output.contains("Backend"));
@@ -549,15 +561,41 @@ mod tests {
         p.add_task("Linked".into(), None, None, None);
         p.add_task("Unlinked".into(), None, None, None);
         p.link_concept(TaskId(1), ConceptId(1)).unwrap();
-        let output = wbs(&p);
+        let output = wbs(&p, None);
         assert!(output.contains("Unlinked"));
     }
 
     #[test]
     fn wbs_empty() {
         let p = Project::new();
-        let output = wbs(&p);
+        let output = wbs(&p, None);
         assert_eq!(output, "@startwbs\n@endwbs\n");
+    }
+
+    #[test]
+    fn wbs_subtree() {
+        let p = sample_project();
+        let output = wbs(&p, Some(ConceptId(1)));
+        assert!(output.contains("* Backend\n"));
+        assert!(output.contains("** API\n"));
+        assert!(output.contains("Design API"));
+        assert!(output.contains("Build API"));
+        assert!(!output.contains("Frontend"));
+        assert!(!output.contains("Build UI"));
+        assert!(!output.contains("Project"));
+    }
+
+    #[test]
+    fn wbs_subtree_omits_unlinked_group() {
+        let mut p = Project::new();
+        p.add_concept("Topic".into(), None, None).unwrap();
+        p.add_task("Linked".into(), None, None, None);
+        p.add_task("Floating".into(), None, None, None);
+        p.link_concept(TaskId(1), ConceptId(1)).unwrap();
+        let output = wbs(&p, Some(ConceptId(1)));
+        assert!(output.contains("Linked"));
+        assert!(!output.contains("Floating"));
+        assert!(!output.contains("Unlinked"));
     }
 
     #[test]
@@ -568,7 +606,7 @@ mod tests {
         p.add_task("Shared".into(), None, None, None);
         p.link_concept(TaskId(1), ConceptId(1)).unwrap();
         p.link_concept(TaskId(1), ConceptId(2)).unwrap();
-        let output = wbs(&p);
+        let output = wbs(&p, None);
         // "Shared" appears under both A and B
         let count = output.matches("Shared").count();
         assert_eq!(count, 2);

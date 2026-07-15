@@ -171,8 +171,8 @@ Diagram types:
 |---------|-------------|--------------|
 | `tree`  | Concept tree as a mindmap | Concept ID (renders subtree) |
 | `dag`   | Task dependency graph | Task ID (renders downstream) |
-| `gantt` | Gantt chart — CPM schedule when tasks have dependencies, else due dates | — |
-| `wbs`   | Work breakdown structure (concepts + tasks) | — |
+| `gantt` | Gantt chart — CPM schedule when tasks have dependencies, else due dates | — (rejected if given) |
+| `wbs`   | Work breakdown structure (concepts + tasks) | Concept ID (renders subtree) |
 
 Examples:
 
@@ -183,6 +183,7 @@ mindtask export plantuml dag            # Full task DAG
 mindtask export plantuml dag 1          # Task 1 and its downstream dependents
 mindtask export plantuml gantt          # Gantt chart (computed schedule, or due dates)
 mindtask export plantuml wbs            # Work breakdown structure
+mindtask export plantuml wbs 1          # WBS subtree rooted at concept 1
 ```
 
 Output is written to stdout. Pipe to a file and render with PlantUML:

@@ -80,7 +80,7 @@ enum Command {
         format: mindtask::export::Format,
         /// Diagram type (tree, dag, gantt, wbs)
         diagram: mindtask::export::DiagramKind,
-        /// Optional root ID (concept ID for tree/wbs, task ID for dag)
+        /// Optional root ID (concept ID for tree/wbs, task ID for dag; not accepted for gantt)
         root: Option<String>,
     },
     /// Report the whole project: concept tree followed by the task list

@@ -19,6 +19,6 @@ pub fn gantt(_project: &Project) -> String {
 }
 
 /// Generate a Mermaid WBS diagram with concepts and tasks (stub).
-pub fn wbs(_project: &Project) -> String {
+pub fn wbs(_project: &Project, _root_id: Option<ConceptId>) -> String {
     "Mermaid export not yet implemented\n".into()
 }
