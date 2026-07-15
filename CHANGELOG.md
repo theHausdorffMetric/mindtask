@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-15
+
 ### Added
 - `export plantuml wbs <CONCEPT_ID>` renders only the WBS subtree rooted at
   that concept (the "Unlinked" group is omitted). Previously the root argument
