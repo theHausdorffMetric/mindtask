@@ -8,6 +8,7 @@ use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::{Placement, Project};
 
 use super::render::{MIN_WRAP_WIDTH, hard_wrap, render_table, resolve_wrap_width};
+use super::state_filter::{StateFilter, hidden_footer};
 use super::task::task_cells;
 
 pub fn add(
@@ -320,7 +321,12 @@ fn collect_upstream_tasks(project: &Project, seed: &HashSet<TaskId>) -> HashSet<
 }
 
 /// Format a short due date for report columns.
-pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
+pub fn report(
+    project: &Project,
+    id: ConceptId,
+    show_desc: bool,
+    filter: &StateFilter,
+) -> Result<()> {
     let root = project
         .get_concept(id)
         .ok_or_else(|| anyhow::anyhow!("concept {} not found", id))?;
@@ -347,14 +353,35 @@ pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
         return Ok(());
     }
 
-    // 4. Walk transitive dependencies upstream
+    // 4. Walk transitive dependencies upstream, seeded from the *visible*
+    // direct tasks — a filtered-out direct task shouldn't pull its
+    // dependency chain into the report. Upstream tasks then face the same
+    // state filter as everything else.
+    let visible_direct_ids: HashSet<TaskId> = direct_task_ids
+        .iter()
+        .copied()
+        .filter(|tid| {
+            project
+                .get_task(*tid)
+                .is_some_and(|t| filter.keeps(t.state))
+        })
+        .collect();
+    let visible_ids: HashSet<TaskId> = collect_upstream_tasks(project, &visible_direct_ids)
+        .into_iter()
+        .filter(|tid| {
+            project
+                .get_task(*tid)
+                .is_some_and(|t| filter.keeps(t.state))
+        })
+        .collect();
+    // What `--state all` would show, so the hidden footer stays honest.
     let all_task_ids = collect_upstream_tasks(project, &direct_task_ids);
 
     // 5. Collect and sort tasks (direct first, then upstream-only)
     let mut tasks: Vec<_> = project
         .tasks
         .iter()
-        .filter(|t| all_task_ids.contains(&t.id))
+        .filter(|t| visible_ids.contains(&t.id))
         .collect();
     // Preserve project ordering (which is insertion order)
     tasks.sort_by_key(|t| {
@@ -367,37 +394,53 @@ pub fn report(project: &Project, id: ConceptId, show_desc: bool) -> Result<()> {
     });
 
     println!("\n=== Tasks ===");
-    let rows: Vec<Vec<String>> = tasks
-        .iter()
-        .map(|&task| {
-            let mut cells = task_cells(task, project);
-            let marker = if direct_task_ids.contains(&task.id) {
-                String::new()
-            } else {
-                "(upstream dep)".to_string()
-            };
-            cells.push(marker);
-            cells
-        })
-        .collect();
-    println!(
-        "{}",
-        render_table(
-            &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", ""],
-            &rows,
-            Some(1),
-            resolve_wrap_width(project),
-        )
-    );
+    if tasks.is_empty() {
+        println!("No tasks in the selected states.");
+    } else {
+        let rows: Vec<Vec<String>> = tasks
+            .iter()
+            .map(|&task| {
+                let mut cells = task_cells(task, project);
+                let marker = if direct_task_ids.contains(&task.id) {
+                    String::new()
+                } else {
+                    "(upstream dep)".to_string()
+                };
+                cells.push(marker);
+                cells
+            })
+            .collect();
+        println!(
+            "{}",
+            render_table(
+                &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", ""],
+                &rows,
+                Some(1),
+                resolve_wrap_width(project),
+            )
+        );
+    }
 
-    let upstream_count = all_task_ids.len() - direct_task_ids.len();
-    if upstream_count > 0 {
+    let shown_direct = tasks
+        .iter()
+        .filter(|t| direct_task_ids.contains(&t.id))
+        .count();
+    let shown_upstream = tasks.len() - shown_direct;
+    if shown_upstream > 0 {
         println!(
             "\n{} direct + {} upstream = {} total tasks",
-            direct_task_ids.len(),
-            upstream_count,
-            all_task_ids.len()
+            shown_direct,
+            shown_upstream,
+            tasks.len()
         );
+    }
+
+    let hidden = project
+        .tasks
+        .iter()
+        .filter(|t| all_task_ids.contains(&t.id) && !visible_ids.contains(&t.id));
+    if let Some(footer) = hidden_footer(hidden) {
+        println!("{footer}");
     }
 
     Ok(())

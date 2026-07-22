@@ -10,7 +10,7 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.6.0"
+  documents-version: "0.7.0"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
@@ -26,7 +26,7 @@ mindtask init [--timezone <IANA>]     # Create .mindtask.json
 mindtask validate                     # Check file integrity
 mindtask config timezone [TZ]         # Get/set timezone (--show to display)
 mindtask config wrap-width [COLS]     # Get/set description wrap width (--show to display, --clear to auto-detect)
-mindtask report [-d|--description]    # Whole project: concept tree + task list
+mindtask report [-d|--description] [--state <STATE,...>]  # Whole project: concept tree + task list
 ```
 
 ### Concepts (tree structure)
@@ -40,7 +40,7 @@ mindtask concept edit <ID> [--name <NAME>] [--description <DESC>] [--clear-descr
 mindtask concept ls
 mindtask concept tree [ID] [-d]       # Full tree (or subtree); -d adds descriptions
 mindtask concept show <ID>
-mindtask concept report <ID> [-d]     # Subtree + linked tasks + upstream deps; -d adds descriptions
+mindtask concept report <ID> [-d] [--state <STATE,...>]  # Subtree + linked tasks + upstream deps; -d adds descriptions
 mindtask concept normalize [--dry-run] # Renumber IDs to 1..n in tree (DFS pre-order) order
 ```
 
@@ -59,11 +59,19 @@ mindtask task add <NAME> [--description <DESC>] [--duration <DAYS>] [--due <DATE
 mindtask task rm <ID>
 mindtask task edit <ID> [--name <NAME>] [--description <DESC>] [--clear-description]
                         [--duration <DAYS>] [--clear-duration]
-mindtask task ls
+mindtask task ls [--state <STATE,...>]
 mindtask task show <ID>
 mindtask task state <ID> <todo|in_progress|done>
 mindtask task due <ID> [DATE] [--clear]
 ```
+
+The task-listing commands (`task ls`, `report`, `concept report`) default to
+`--state todo,in_progress` — **done tasks are hidden**. `--state` takes any
+comma-separated or repeated combination of `todo`, `in_progress`, `done`, or
+`all` for everything. A footer accounts for hidden rows, e.g.
+`(hidden: 12 done — --state all to show)`; dependency IDs in `DEPENDS ON`
+stay verbatim even when the referenced task's row is hidden. In
+`concept report`, hidden direct tasks don't pull their upstream chains in.
 
 ### Dependencies (between tasks)
 
@@ -143,3 +151,4 @@ Due dates accept these formats:
 - Chain commands: add a task (with `--concept` to link it), set its dependency, then export.
 - Use `mindtask search` to find IDs of existing items before editing or linking.
 - Use `mindtask concept report <ID>` to see all work needed for a concept area, including transitive dependencies from outside the subtree.
+- Listings hide done tasks by default; add `--state all` when you need the full history (a footer line tells you when rows were hidden).

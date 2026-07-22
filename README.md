@@ -67,7 +67,7 @@ mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
 mindtask config wrap-width [<COLS>]     # Get or set the description wrap width
 mindtask config wrap-width --clear      # Revert to terminal-width auto-detection
-mindtask report [-d|--description]     # Whole project: concept tree + task list
+mindtask report [-d|--description] [--state <STATE,...>]  # Whole project: concept tree + task list
 ```
 
 Any command accepts the global `-f`/`--file <PATH>` flag to target a specific project file instead of searching from the current directory.
@@ -85,7 +85,7 @@ mindtask concept mv <ID> --before <SIB>|--after <SIB> # Position among siblings 
 mindtask concept ls
 mindtask concept tree [<ID>] [-d|--description]
 mindtask concept show <ID>
-mindtask concept report <ID> [-d|--description]
+mindtask concept report <ID> [-d|--description] [--state <STATE,...>]
 mindtask concept normalize [--dry-run]               # Renumber IDs to 1..n in tree (DFS pre-order) order
 ```
 
@@ -95,7 +95,7 @@ Concepts print in file (array) order, not by ID. Sibling order therefore follows
 
 Pass `-d`/`--description` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches. Long descriptions are hard-wrapped to fit the available width, which follows the terminal (falling back to 80 columns when the width is unknown, e.g. piped output). Set a fixed width with `config wrap-width <COLS>` to override detection, or `config wrap-width --clear` to go back to auto-detection.
 
-`concept report` shows the concept subtree, all tasks linked to concepts in that subtree, and all transitive upstream dependencies (tasks required by those tasks, even if linked to concepts outside the subtree). Upstream-only tasks are marked `(upstream dep)`.
+`concept report` shows the concept subtree, all tasks linked to concepts in that subtree, and all transitive upstream dependencies (tasks required by those tasks, even if linked to concepts outside the subtree). Upstream-only tasks are marked `(upstream dep)`. The task table honors the `--state` filter (see [Tasks](#tasks)): hidden direct tasks don't pull their dependency chains into the report.
 
 ### Tasks
 
@@ -105,12 +105,14 @@ Tasks form a dependency DAG. Each task has a workflow state (`todo`, `in_progres
 mindtask task add <NAME> [--description <TEXT>] [--duration <DAYS>] [--due <DATE>] [--concept <ID>]...
 mindtask task edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-description] [--duration <DAYS>] [--clear-duration]
 mindtask task rm <ID>
-mindtask task ls
+mindtask task ls [--state <STATE,...>]
 mindtask task show <ID>
 mindtask task state <ID> <todo|in_progress|done>
 mindtask task due <ID> <DATE>
 mindtask task due <ID> --clear
 ```
+
+The task-listing commands — `task ls`, the top-level `report`, and `concept report` — default to showing open work only (`--state todo,in_progress`). Pass `--state` with any comma-separated or repeated combination of `todo`, `in_progress`, and `done`, or `--state all` for everything. Whenever the filter hides rows, a footer accounts for them, e.g. `(hidden: 12 done — --state all to show)`. `DEPENDS ON` cells always list dependency IDs verbatim, even when the referenced task's own row is hidden.
 
 Due dates accept multiple formats:
 - Date only: `2025-03-15` (midnight in project timezone)

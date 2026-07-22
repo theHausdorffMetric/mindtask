@@ -5,6 +5,7 @@ use mindtask::model::project::Project;
 use mindtask::model::task::{Task, TaskState, parse_due};
 
 use super::render::{render_table, resolve_wrap_width};
+use super::state_filter::{StateFilter, hidden_footer};
 
 /// Format a Zoned datetime for display, converting to the project timezone.
 fn format_due(due: &jiff::Zoned, project: &Project) -> String {
@@ -154,30 +155,39 @@ pub fn remove(project: &mut Project, id: TaskId) -> Result<()> {
     Ok(())
 }
 
-pub fn list(project: &Project) {
+pub fn list(project: &Project, filter: &StateFilter) {
     if project.tasks.is_empty() {
         println!("No tasks.");
         return;
     }
 
-    let rows: Vec<Vec<String>> = project
-        .tasks
-        .iter()
-        .map(|task| {
-            let mut cells = task_cells(task, project);
-            cells.push(join_ids(&task.concepts));
-            cells
-        })
-        .collect();
-    println!(
-        "{}",
-        render_table(
-            &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", "CONCEPTS"],
-            &rows,
-            Some(1),
-            resolve_wrap_width(project),
-        )
-    );
+    let (shown, hidden): (Vec<&Task>, Vec<&Task>) =
+        project.tasks.iter().partition(|t| filter.keeps(t.state));
+
+    if shown.is_empty() {
+        println!("No tasks in the selected states.");
+    } else {
+        let rows: Vec<Vec<String>> = shown
+            .iter()
+            .map(|&task| {
+                let mut cells = task_cells(task, project);
+                cells.push(join_ids(&task.concepts));
+                cells
+            })
+            .collect();
+        println!(
+            "{}",
+            render_table(
+                &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", "CONCEPTS"],
+                &rows,
+                Some(1),
+                resolve_wrap_width(project),
+            )
+        );
+    }
+    if let Some(footer) = hidden_footer(hidden) {
+        println!("{footer}");
+    }
 }
 
 pub fn show(project: &Project, id: TaskId) -> Result<()> {

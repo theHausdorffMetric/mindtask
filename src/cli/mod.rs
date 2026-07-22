@@ -4,6 +4,7 @@ mod project;
 mod render;
 mod schedule;
 mod search;
+mod state_filter;
 mod task;
 
 use std::path::{Path, PathBuf};
@@ -13,6 +14,8 @@ use clap::{Parser, Subcommand};
 
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::task::TaskState;
+
+use state_filter::{StateArg, StateFilter};
 
 const PROJECT_FILE: &str = ".mindtask.json";
 
@@ -88,6 +91,15 @@ enum Command {
         /// Show concept descriptions below each node in the tree
         #[arg(short, long)]
         description: bool,
+        /// Show only tasks in these states: todo, in_progress, done, or all
+        /// (comma-separated or repeated)
+        #[arg(
+            long,
+            value_name = "STATE,...",
+            value_delimiter = ',',
+            default_value = "todo,in_progress"
+        )]
+        state: Vec<StateArg>,
     },
     /// Show the computed schedule: earliest start/finish, slack, critical path
     Schedule {
@@ -170,6 +182,15 @@ enum ConceptCommand {
         /// Show concept descriptions below each node in the tree
         #[arg(short, long)]
         description: bool,
+        /// Show only tasks in these states: todo, in_progress, done, or all
+        /// (comma-separated or repeated)
+        #[arg(
+            long,
+            value_name = "STATE,...",
+            value_delimiter = ',',
+            default_value = "todo,in_progress"
+        )]
+        state: Vec<StateArg>,
     },
     /// Renumber concept IDs to 1..n in tree (DFS pre-order) order
     Normalize {
@@ -224,7 +245,17 @@ enum TaskCommand {
         id: TaskId,
     },
     /// List all tasks
-    Ls,
+    Ls {
+        /// Show only tasks in these states: todo, in_progress, done, or all
+        /// (comma-separated or repeated)
+        #[arg(
+            long,
+            value_name = "STATE,...",
+            value_delimiter = ',',
+            default_value = "todo,in_progress"
+        )]
+        state: Vec<StateArg>,
+    },
     /// Show details of a task
     Show {
         /// Task ID (e.g. 1)
@@ -348,12 +379,12 @@ pub fn run() -> Result<()> {
 
     match command {
         Command::Init { timezone } => project::init(timezone),
-        Command::Report { description } => {
+        Command::Report { description, state } => {
             let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
             concept::tree(&proj, None, description)?;
             println!();
-            task::list(&proj);
+            task::list(&proj, &StateFilter::new(&state));
             Ok(())
         }
         Command::Schedule { critical } => {
@@ -403,8 +434,12 @@ pub fn run() -> Result<()> {
                     concept::show(&proj, id)?;
                     return Ok(());
                 }
-                ConceptCommand::Report { id, description } => {
-                    concept::report(&proj, id, description)?;
+                ConceptCommand::Report {
+                    id,
+                    description,
+                    state,
+                } => {
+                    concept::report(&proj, id, description, &StateFilter::new(&state))?;
                     return Ok(());
                 }
                 ConceptCommand::Normalize { dry_run } => {
@@ -444,8 +479,8 @@ pub fn run() -> Result<()> {
                     clear_duration,
                 )?,
                 TaskCommand::Rm { id } => task::remove(&mut proj, id)?,
-                TaskCommand::Ls => {
-                    task::list(&proj);
+                TaskCommand::Ls { state } => {
+                    task::list(&proj, &StateFilter::new(&state));
                     return Ok(());
                 }
                 TaskCommand::Show { id } => {

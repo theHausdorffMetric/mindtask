@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-22
+
+### Added
+- `--state <STATE,...>` filter on `report`, `task ls`, and `concept report`:
+  any comma-separated or repeated combination of `todo`, `in_progress`, and
+  `done`, or `all` for every state. When the filter hides rows, a one-line
+  footer accounts for them (`(hidden: 12 done — --state all to show)`).
+
+### Changed
+- **Breaking (output):** `report`, `task ls`, and `concept report` now default
+  to `--state todo,in_progress` — done tasks are hidden unless requested; pass
+  `--state all` for the previous behavior. In `concept report`, a hidden
+  direct task no longer pulls its upstream dependency chain into the report,
+  and the `N direct + M upstream` summary counts visible tasks only.
+
 ## [0.6.0] - 2026-07-15
 
 ### Added
