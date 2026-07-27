@@ -157,6 +157,10 @@ fn gantt_scheduled(project: &Project) -> String {
         Err(_) => return gantt_due(project), // cyclic input — pre-validate guards this
     };
 
+    // Declarations (`lasts`/colour) first, then all `starts at` constraints:
+    // PlantUML resolves task references line by line, so a constraint naming a
+    // task that is only declared further down is an error (forward reference).
+    let mut constraints = String::new();
     let mut out = String::from("@startgantt\n");
     for st in &sched.tasks {
         let Some(task) = project.get_task(st.id) else {
@@ -166,7 +170,7 @@ fn gantt_scheduled(project: &Project) -> String {
         writeln!(out, "[{}] lasts {days} days", task.name).unwrap();
 
         if let Some(bind) = binding_predecessor(project, &sched, st) {
-            writeln!(out, "[{}] starts at [{bind}]'s end", task.name).unwrap();
+            writeln!(constraints, "[{}] starts at [{bind}]'s end", task.name).unwrap();
         }
 
         if st.critical {
@@ -183,6 +187,7 @@ fn gantt_scheduled(project: &Project) -> String {
             }
         }
     }
+    out.push_str(&constraints);
     out.push_str("@endgantt\n");
     out
 }
@@ -538,6 +543,29 @@ mod tests {
         assert!(out.contains("[Long] is colored in Tomato"), "{out}");
         // Off the critical path → keeps its workflow-state colour.
         assert!(out.contains("[Short] is colored in Gold"), "{out}");
+    }
+
+    #[test]
+    fn gantt_scheduled_constraints_follow_all_declarations() {
+        // Task 1 depends on task 2, so its constraint references a task that
+        // schedule order declares later. PlantUML rejects forward references:
+        // every `starts at` must come after the last `lasts` declaration.
+        let mut p = Project::new();
+        p.add_task("Late".into(), None, Some(1.0), None); // 1
+        p.add_task("Early".into(), None, Some(2.0), None); // 2
+        p.add_dependency(TaskId(1), TaskId(2)).unwrap();
+        let out = gantt(&p);
+        assert!(out.contains("[Late] starts at [Early]'s end"), "{out}");
+        let lines: Vec<&str> = out.lines().collect();
+        let last_decl = lines.iter().rposition(|l| l.contains("] lasts ")).unwrap();
+        let first_constraint = lines
+            .iter()
+            .position(|l| l.contains("] starts at "))
+            .unwrap();
+        assert!(
+            last_decl < first_constraint,
+            "constraint emitted before a declaration:\n{out}"
+        );
     }
 
     #[test]

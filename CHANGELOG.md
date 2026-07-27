@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- `export plantuml gantt` (schedule-driven variant) emitted `starts at`
+  constraints interleaved with task declarations, producing PlantUML forward
+  references — a dependency on a task declared later in schedule order made
+  PlantUML fail with `Error line N`. All `lasts`/colour declarations are now
+  emitted first, followed by all `starts at` constraints.
+
 ## [0.7.0] - 2026-07-22
 
 ### Added
