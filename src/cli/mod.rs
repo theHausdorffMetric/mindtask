@@ -1,5 +1,6 @@
 mod concept;
 mod config;
+mod import;
 mod project;
 mod render;
 mod schedule;
@@ -109,6 +110,25 @@ enum Command {
     },
     /// Validate the project file
     Validate,
+    /// Import a typed concept-graph JSONL (e.g. pdfdex `graph --format jsonl`):
+    /// project its is-a slice onto a strict tree under a target concept
+    Import {
+        /// JSONL file to read, or "-" for stdin
+        input: PathBuf,
+        /// Concept ID the imported taxonomy lands under (e.g. 4)
+        #[arg(long)]
+        under: ConceptId,
+        /// Drop graph nodes seen in fewer than this many documents
+        #[arg(long, default_value_t = 1)]
+        min_docs: usize,
+        /// Re-parent existing (name-matched) concepts to the projected parent
+        /// instead of only reporting the drift
+        #[arg(long)]
+        reparent: bool,
+        /// Print the projection and merge report without saving
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Manage project configuration
     #[command(subcommand)]
     Config(ConfigCommand),
@@ -524,6 +544,20 @@ pub fn run() -> Result<()> {
             let mut proj = load_project(&path)?;
             task::unlink(&mut proj, task_id, concept_id)?;
             save_project(&path, &proj)
+        }
+        Command::Import {
+            input,
+            under,
+            min_docs,
+            reparent,
+            dry_run,
+        } => {
+            let path = resolve_project_file(file)?;
+            let mut proj = load_project(&path)?;
+            if import::run(&mut proj, &input, under, min_docs, reparent, dry_run)? {
+                save_project(&path, &proj)?;
+            }
+            Ok(())
         }
         Command::Search { query, description } => {
             let path = resolve_project_file(file)?;

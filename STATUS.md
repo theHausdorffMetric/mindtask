@@ -1,11 +1,19 @@
 # mindtask — Status
 
-## Current Phase: Scheduling (Phase 6)
+## Current Phase: Scheduling (Phase 6) + graph import (0.8.0)
 
 Phases 1–6 are implemented: data model, concept tree, task DAG, CLI, PlantUML
 diagram export, concept subtree reporting, and CPM scheduling (earliest/latest
 times, slack, critical path) surfaced by `mindtask schedule` and the
 schedule-driven Gantt.
+
+**0.8.0 (2026-08-02): `mindtask import`** — consumes a typed concept-graph
+JSONL stream (the `pdfdex graph --format jsonl` contract) and merges its
+`is-a` slice into the concept tree as a strict subtree under a target concept
+(multi-parent → highest-weight edge, cycles broken at the weakest edge,
+roots grouped under category umbrellas; add-only by default, `--reparent`
+opt-in, `--dry-run`). The cross-project seam from the ideas repo (task 6).
+Not yet published to crates.io.
 
 ## What's Done
 

@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-02
+
+### Added
+- `mindtask import <FILE|-> --under <ID>`: consume a typed concept-graph
+  JSONL stream (the `pdfdex graph --format jsonl` contract) and merge its
+  `is-a` slice into the concept tree as a strict subtree. Multi-parent
+  nodes keep their highest-weight parent, cycles are broken at their
+  weakest edge, and parentless concepts group under a category umbrella.
+  Merging is by name within the target subtree and add-only by default:
+  existing concepts are never moved or deleted; parent drift is reported
+  and only applied with `--reparent`. `--min-docs` prunes weak nodes,
+  `--dry-run` rehearses without saving. New `mindtask::import` lib module.
+
 ### Fixed
 - `export plantuml gantt` (schedule-driven variant) emitted `starts at`
   constraints interleaved with task declarations, producing PlantUML forward

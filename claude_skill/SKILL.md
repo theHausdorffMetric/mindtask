@@ -10,7 +10,7 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.7.0"
+  documents-version: "0.8.0"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
@@ -108,6 +108,22 @@ mindtask search <QUERY> [-d]          # -d also searches descriptions
 ```
 
 Case-insensitive substring match across concepts and tasks.
+
+### Import (concept-graph JSONL → concept subtree)
+
+```
+mindtask import <FILE|-> --under <ID> [--min-docs <N>] [--reparent] [--dry-run]
+```
+
+Reads a typed concept-graph JSONL stream (one JSON object per line — the
+contract `pdfdex graph --format jsonl` emits), takes its `is-a` edges, and
+projects that sub-DAG onto a strict tree merged under concept `<ID>`:
+multi-parent nodes keep their highest-weight parent, cycles are broken at
+their weakest edge, and parentless concepts group under a category umbrella.
+Merging is by name within the target subtree and **add-only by default**:
+existing concepts are never moved or deleted — a differing projected parent
+is reported as drift unless `--reparent` is passed. `--dry-run` prints the
+full projection and merge report without saving.
 
 ### Export
 

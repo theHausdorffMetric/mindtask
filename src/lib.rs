@@ -12,8 +12,11 @@
 //!   and the task dependency DAG.
 //! - [`store`] — JSON file persistence (load/save).
 //! - [`export`] — Diagram generation (PlantUML, Mermaid stub) for visualization.
+//! - [`import`] — Concept-graph JSONL ingestion: project an `is-a` DAG onto
+//!   the strict tree and merge it under a target concept.
 
 pub mod export;
 pub mod graph;
+pub mod import;
 pub mod model;
 pub mod store;
