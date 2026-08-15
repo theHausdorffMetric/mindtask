@@ -144,6 +144,41 @@ Diagram types and what they show:
 
 Currently supported: **PlantUML** for all four diagram types.
 
+### PDF report (Typst)
+
+To pretty-print a whole project as one PDF, combine the text report with the
+four diagrams via Typst (SVG embeds natively — no LaTeX, no rsvg toolchain):
+
+```sh
+mindtask report > report.txt
+for d in tree wbs dag gantt; do mindtask export plantuml $d > $d.puml; done
+# render each .puml to SVG with any PlantUML renderer (plantuml -tsvg …)
+typst compile main.typ project-report.pdf
+```
+
+`main.typ` — portrait text page, landscape diagram pages, fit-to-page:
+
+```typst
+#set page(paper: "a4", margin: 15mm)
+#set text(font: "DejaVu Sans", size: 9pt)
+= Project report
+#text(size: 7.5pt)[#raw(read("report.txt"), block: true)]
+
+#let diagram(title, path) = {
+  set page(paper: "a4", flipped: true, margin: 10mm)
+  pagebreak(weak: true)
+  heading(level: 2, title)
+  align(center + horizon, image(path, fit: "contain", width: 100%, height: 88%))
+}
+#diagram("Concept tree", "tree.svg")
+#diagram("Work breakdown structure", "wbs.svg")
+#diagram("Task dependency DAG", "dag.svg")
+#diagram("Gantt", "gantt.svg")
+```
+
+Requires mindtask ≥ 0.8.0 for the gantt export when tasks have dependencies
+(0.7.0 emitted forward references PlantUML rejects).
+
 ## Date format
 
 Due dates accept these formats:
