@@ -11,7 +11,8 @@
 //! - [`graph`] — Structural validation: cycle detection for the concept tree
 //!   and the task dependency DAG.
 //! - [`store`] — JSON file persistence (load/save).
-//! - [`export`] — Diagram generation (PlantUML, Mermaid stub) for visualization.
+//! - [`export`] — Diagram generation (PlantUML; Mermaid is not implemented
+//!   and returns an error) for visualization.
 //! - [`import`] — Concept-graph JSONL ingestion: project an `is-a` DAG onto
 //!   the strict tree and merge it under a target concept.
 

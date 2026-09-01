@@ -7,6 +7,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The Gantt export no longer identifies tasks by name** (code review C9).
+  Task names are not unique, so two tasks sharing one collapsed into a single
+  PlantUML identifier — and a dependency between them emitted
+  `[X] starts at [X]'s end`, a self-dependency the project does not contain.
+  PlantUML *accepts* that, so the rendered chart was wrong rather than
+  rejected. Tasks are now declared once as `[name] as [t<id>]` and addressed
+  only by that alias, matching what the `dag` export already did.
+- **Names are sanitised before being written into diagram syntax** (C8).
+  A `"` closed a component label early, `[`/`]` unbalanced a Gantt label, and
+  an embedded newline split one declaration across two lines. PlantUML has no
+  escape mechanism for these, so offending characters are substituted with
+  visually equivalent safe ones (`"`→`'`, `[`/`]`→`(`/`)`, whitespace runs
+  collapsed); a name that sanitises to nothing renders as `(unnamed)`.
+  Verified no-op on real data: `tree`, `dag`, and `wbs` output is byte-identical
+  for a 46-concept/135-task project.
+- **`export mermaid` now fails instead of reporting success** (C5, open since
+  the v0.2.1 review). Every mermaid path returned `Ok("… not yet implemented")`
+  with exit status 0, which a script could not distinguish from a real diagram.
+  It now returns an error and exits non-zero, writing nothing to stdout.
+
+### Changed
+- `mindtask::export::mermaid`'s four entry points return
+  `Result<String, String>` rather than `String`.
+
+### Fixed
 - **Saves are now atomic** (code review C2). `save` used `std::fs::write`, which
   truncates the target and then rewrites it in place: an interrupt, crash, or
   full disk mid-write could leave `.mindtask.json` — the single source of truth

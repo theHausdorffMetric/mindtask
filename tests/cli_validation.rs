@@ -381,3 +381,36 @@ fn valid_project_loads_and_lists() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("valid"), "stdout: {stdout}");
 }
+
+#[test]
+fn mermaid_export_fails_instead_of_emitting_a_placeholder() {
+    // Until 0.9.1 every mermaid path printed "not yet implemented" to stdout
+    // and exited 0, so a script could not tell it from a real diagram.
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [{ "id": 1, "name": "Root" }],
+          "tasks": []
+        }"#,
+    );
+
+    for kind in ["tree", "dag", "gantt", "wbs"] {
+        let out = run(dir.path(), &["export", "mermaid", kind]);
+        assert!(
+            !out.status.success(),
+            "mermaid {kind} exited 0: {}",
+            String::from_utf8_lossy(&out.stdout)
+        );
+        assert!(
+            out.stdout.is_empty(),
+            "mermaid {kind} wrote to stdout: {}",
+            String::from_utf8_lossy(&out.stdout)
+        );
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("not implemented"), "stderr: {err}");
+    }
+
+    // The plantuml path is unaffected.
+    let ok = run(dir.path(), &["export", "plantuml", "tree"]);
+    assert!(ok.status.success());
+}

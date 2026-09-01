@@ -166,7 +166,7 @@ boundaries.
 
 ## Correctness / robustness
 
-### C5. Mermaid stubs report success — `src/export/mermaid.rs` — *carried forward, still open*
+### C5. Mermaid stubs report success — `src/export/mermaid.rs` — ✅ FIXED (phase 1)
 
 Every mermaid path returns `Ok("Mermaid export not yet implemented\n")`, so:
 
@@ -180,7 +180,7 @@ junk file. Two years of `.mmd` files could accumulate before anyone notices.
 Either return `Err` or drop `mermaid` from the accepted CLI values until it
 exists. Unchanged since v0.2.1 and still the cheapest correctness win available.
 
-### C8. PlantUML export never escapes names — `src/export/plantuml.rs` — **high**
+### C8. PlantUML export never escapes names — `src/export/plantuml.rs` — **high** — ✅ FIXED (phase 1)
 
 Names are interpolated raw into generated diagram syntax at every site:
 `component "{name}"`, `[{name}] lasts`, `* {name}`. Nothing escapes `"`, `[`,
@@ -197,7 +197,7 @@ $ mindtask export plantuml gantt
 A name containing a newline splits one declaration across two lines, which can
 produce output that is *valid but wrong* rather than a clean parse error.
 
-### C9. The Gantt export identifies tasks by name, so duplicate names collide — **high**
+### C9. The Gantt export identifies tasks by name, so duplicate names collide — **high** — ✅ FIXED (phase 1)
 
 This is the most serious finding, because it corrupts output silently rather
 than producing a syntax error. `gantt_scheduled` and `binding_predecessor` both
@@ -365,7 +365,7 @@ some of their behaviour end-to-end, but `concept::report`'s upstream-dependency
 collection — the most intricate logic in the CLI layer — is only exercised
 through `tests/state_filter.rs`.
 
-### T4. No test asserts generated diagrams are well-formed
+### T4. No test asserts generated diagrams are well-formed — ✅ FIXED (phase 1)
 
 `export/plantuml.rs` has 297 lines of tests, all asserting on *expected happy
 output*. None feeds a hostile name through, which is why C8 and C9 survived to
@@ -379,7 +379,7 @@ through export without producing unbalanced delimiters — would have caught bot
 Ordered by (severity × confidence) ÷ effort. Phases 1 and 2 are the ones that
 fix live defects; 3–5 are hardening and consistency.
 
-### Phase 1 — Output correctness (fixes silent wrongness)
+### Phase 1 — Output correctness (fixes silent wrongness) — ✅ DONE
 
 1. **C9 — Gantt identity.** Emit `[Task name] as [t<id>]` aliases and reference
    tasks by alias in `starts at` constraints and colour directives. Removes the
@@ -395,7 +395,12 @@ fix live defects; 3–5 are hardening and consistency.
 4. **C5 — mermaid.** Return `Err("mermaid export not yet implemented")` so the
    exit code is non-zero. Two lines plus a CLI test.
 
-*Contained to `export/`. No API changes. Ships as 0.9.1.*
+*Done.* Contained to `export/`; the only API change is `mermaid::*` returning
+`Result`. Verified against the real PlantUML renderer (podman): all four
+diagram kinds render cleanly for a project of deliberately hostile names, and
+`tree`/`dag`/`wbs` output is byte-identical to the previous release for a real
+46-concept/135-task project — so the sanitising is provably a no-op on ordinary
+names. Six new regression tests.
 
 ### Phase 2 — Input validation (fixes silent data loss)
 

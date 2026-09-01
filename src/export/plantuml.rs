@@ -9,6 +9,41 @@ use crate::model::id::{ConceptId, TaskId};
 use crate::model::project::Project;
 use crate::model::task::{Task, TaskState};
 
+// --- Label sanitising -------------------------------------------------------
+//
+// Names are user text and go straight into generated diagram syntax, which has
+// no escape mechanism for its structural characters. PlantUML would either
+// reject the output or — worse — accept a mangled version, so offending
+// characters are substituted with visually equivalent safe ones rather than
+// escaped.
+
+/// Placeholder for a name that sanitises to nothing.
+const UNNAMED: &str = "(unnamed)";
+
+/// Collapse every whitespace run — newlines and tabs included — to a single
+/// space, and trim. PlantUML is line-oriented: an embedded newline would split
+/// one declaration across two lines, silently producing a different diagram.
+fn one_line(s: &str) -> String {
+    let joined = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if joined.is_empty() {
+        UNNAMED.to_string()
+    } else {
+        joined
+    }
+}
+
+/// Label for a `"…"`-quoted position (component names). A literal `"` closes
+/// the string early; PlantUML has no escape for it, so it becomes an apostrophe.
+fn quoted_label(s: &str) -> String {
+    one_line(s).replace('"', "'")
+}
+
+/// Label for a `[…]`-delimited position (Gantt task names). Brackets would
+/// unbalance the delimiter, so they become parentheses.
+fn bracket_label(s: &str) -> String {
+    one_line(s).replace('[', "(").replace(']', ")")
+}
+
 /// Generate a PlantUML mindmap of the concept tree.
 ///
 /// If `root_id` is given, only the subtree rooted at that concept is rendered.
@@ -42,7 +77,7 @@ fn write_mindmap_node(out: &mut String, project: &Project, concept: &Concept, de
     for _ in 0..depth {
         out.push('*');
     }
-    writeln!(out, " {}", concept.name).unwrap();
+    writeln!(out, " {}", one_line(&concept.name)).unwrap();
 
     for child in project.children_of(concept.id) {
         write_mindmap_node(out, project, child, depth + 1);
@@ -80,7 +115,9 @@ pub fn dag(project: &Project, root_id: Option<TaskId>) -> String {
         writeln!(
             out,
             "component \"{}\" as t{}{}",
-            task.name, task.id, stereotype
+            quoted_label(&task.name),
+            task.id,
+            stereotype
         )
         .unwrap();
     }
@@ -167,21 +204,31 @@ fn gantt_scheduled(project: &Project) -> String {
             continue;
         };
         let days = st.duration.round().max(0.0) as i64;
-        writeln!(out, "[{}] lasts {days} days", task.name).unwrap();
+        // Declare once with an ID alias, then address the task only by that
+        // alias. Names are not unique, so using them as identifiers merged
+        // distinct tasks into one — and a dependency between two same-named
+        // tasks became a self-referential constraint PlantUML happily drew.
+        writeln!(
+            out,
+            "[{}] as [t{}] lasts {days} days",
+            bracket_label(&task.name),
+            st.id
+        )
+        .unwrap();
 
         if let Some(bind) = binding_predecessor(project, &sched, st) {
-            writeln!(constraints, "[{}] starts at [{bind}]'s end", task.name).unwrap();
+            writeln!(constraints, "[t{}] starts at [t{bind}]'s end", st.id).unwrap();
         }
 
         if st.critical {
-            writeln!(out, "[{}] is colored in Tomato", task.name).unwrap();
+            writeln!(out, "[t{}] is colored in Tomato", st.id).unwrap();
         } else {
             match task.state {
                 TaskState::Done => {
-                    writeln!(out, "[{}] is colored in LightGreen", task.name).unwrap();
+                    writeln!(out, "[t{}] is colored in LightGreen", st.id).unwrap();
                 }
                 TaskState::InProgress => {
-                    writeln!(out, "[{}] is colored in Gold", task.name).unwrap();
+                    writeln!(out, "[t{}] is colored in Gold", st.id).unwrap();
                 }
                 TaskState::Todo => {}
             }
@@ -194,18 +241,16 @@ fn gantt_scheduled(project: &Project) -> String {
 
 /// The predecessor whose finish sets this task's earliest start (ES = its EF),
 /// used as the PlantUML start constraint. None when the task has no dependency.
-fn binding_predecessor<'a>(
-    project: &'a Project,
-    sched: &Schedule,
-    st: &ScheduledTask,
-) -> Option<&'a str> {
+///
+/// Returns the predecessor's ID rather than its name: the constraint addresses
+/// tasks by their `t<id>` alias, and names are neither unique nor stable.
+fn binding_predecessor(project: &Project, sched: &Schedule, st: &ScheduledTask) -> Option<TaskId> {
     let task = project.get_task(st.id)?;
     task.depends_on
         .iter()
         .filter_map(|d| sched.get(*d).map(|sd| (*d, sd.earliest_finish)))
         .find(|(_, ef)| (ef - st.earliest_start).abs() < 1e-9)
-        .and_then(|(d, _)| project.get_task(d))
-        .map(|t| t.name.as_str())
+        .map(|(d, _)| d)
 }
 
 /// Generate a PlantUML Gantt chart from tasks with due dates.
@@ -237,8 +282,9 @@ fn gantt_due(project: &Project) -> String {
 
         writeln!(
             out,
-            "[{}] starts {} and ends {}",
-            task.name,
+            "[{}] as [t{}] starts {} and ends {}",
+            bracket_label(&task.name),
+            task.id,
             start.date(),
             due.date(),
         )
@@ -246,10 +292,10 @@ fn gantt_due(project: &Project) -> String {
 
         match task.state {
             TaskState::Done => {
-                writeln!(out, "[{}] is colored in LightGreen", task.name).unwrap();
+                writeln!(out, "[t{}] is colored in LightGreen", task.id).unwrap();
             }
             TaskState::InProgress => {
-                writeln!(out, "[{}] is colored in Gold", task.name).unwrap();
+                writeln!(out, "[t{}] is colored in Gold", task.id).unwrap();
             }
             TaskState::Todo => {}
         }
@@ -304,7 +350,7 @@ pub fn wbs(project: &Project, root_id: Option<ConceptId>) -> String {
                 if !unlinked.is_empty() {
                     writeln!(out, "** Unlinked").unwrap();
                     for task in &unlinked {
-                        writeln!(out, "*** {}", task.name).unwrap();
+                        writeln!(out, "*** {}", one_line(&task.name)).unwrap();
                     }
                 }
             }
@@ -325,7 +371,7 @@ fn write_wbs_concept(
     for _ in 0..depth {
         out.push('*');
     }
-    writeln!(out, " {}", concept.name).unwrap();
+    writeln!(out, " {}", one_line(&concept.name)).unwrap();
 
     // Tasks linked to this concept as leaves
     if let Some(tasks) = concept_tasks.get(&concept.id) {
@@ -333,7 +379,7 @@ fn write_wbs_concept(
             for _ in 0..=depth {
                 out.push('*');
             }
-            writeln!(out, " {}", task.name).unwrap();
+            writeln!(out, " {}", one_line(&task.name)).unwrap();
         }
     }
 
@@ -477,7 +523,7 @@ mod tests {
         let output = gantt(&p);
         assert!(output.starts_with("@startgantt\n"));
         assert!(output.ends_with("@endgantt\n"));
-        assert!(output.contains("[Deploy] starts 2025-03-13 and ends 2025-03-15"));
+        assert!(output.contains("[Deploy] as [t1] starts 2025-03-13 and ends 2025-03-15"));
     }
 
     #[test]
@@ -504,7 +550,8 @@ mod tests {
         p.add_task("Done".into(), None, None, Some(due.clone()));
         p.set_task_state(TaskId(1), TaskState::Done).unwrap();
         let output = gantt(&p);
-        assert!(output.contains("[Done] is colored in LightGreen"));
+        assert!(output.contains("[Done] as [t1] starts"));
+        assert!(output.contains("[t1] is colored in LightGreen"));
     }
 
     #[test]
@@ -522,11 +569,11 @@ mod tests {
         p.add_task("B".into(), None, Some(2.0), None);
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         let out = gantt(&p);
-        assert!(out.contains("[A] lasts 1 days"), "{out}");
-        assert!(out.contains("[B] lasts 2 days"), "{out}");
-        assert!(out.contains("[B] starts at [A]'s end"), "{out}");
-        assert!(out.contains("[A] is colored in Tomato"), "{out}");
-        assert!(out.contains("[B] is colored in Tomato"), "{out}");
+        assert!(out.contains("[A] as [t1] lasts 1 days"), "{out}");
+        assert!(out.contains("[B] as [t2] lasts 2 days"), "{out}");
+        assert!(out.contains("[t2] starts at [t1]'s end"), "{out}");
+        assert!(out.contains("[t1] is colored in Tomato"), "{out}");
+        assert!(out.contains("[t2] is colored in Tomato"), "{out}");
     }
 
     #[test]
@@ -540,9 +587,9 @@ mod tests {
         p.add_dependency(TaskId(3), TaskId(1)).unwrap();
         p.set_task_state(TaskId(3), TaskState::InProgress).unwrap();
         let out = gantt(&p);
-        assert!(out.contains("[Long] is colored in Tomato"), "{out}");
+        assert!(out.contains("[t2] is colored in Tomato"), "{out}");
         // Off the critical path → keeps its workflow-state colour.
-        assert!(out.contains("[Short] is colored in Gold"), "{out}");
+        assert!(out.contains("[t3] is colored in Gold"), "{out}");
     }
 
     #[test]
@@ -555,7 +602,7 @@ mod tests {
         p.add_task("Early".into(), None, Some(2.0), None); // 2
         p.add_dependency(TaskId(1), TaskId(2)).unwrap();
         let out = gantt(&p);
-        assert!(out.contains("[Late] starts at [Early]'s end"), "{out}");
+        assert!(out.contains("[t1] starts at [t2]'s end"), "{out}");
         let lines: Vec<&str> = out.lines().collect();
         let last_decl = lines.iter().rposition(|l| l.contains("] lasts ")).unwrap();
         let first_constraint = lines
@@ -638,5 +685,140 @@ mod tests {
         // "Shared" appears under both A and B
         let count = output.matches("Shared").count();
         assert_eq!(count, 2);
+    }
+
+    // --- Hostile names -----------------------------------------------------
+    //
+    // Names are user text interpolated into generated syntax. Until 0.9.1 they
+    // went in raw, so a quote, a bracket, or a newline produced broken output —
+    // and two tasks sharing a name collapsed into one Gantt identifier. These
+    // pin the guarantees rather than any particular rendering.
+
+    /// Names that previously broke one or more diagram kinds.
+    const HOSTILE: [&str; 6] = [
+        r#"He said "hello""#,
+        "Fix [urgent] bug",
+        "line one\nline two",
+        "   ",
+        "tabs\tand\nnewlines",
+        "trailing bracket ]",
+    ];
+
+    fn hostile_project() -> Project {
+        let mut p = Project::new();
+        p.timezone = Some("UTC".into());
+        let root = p.add_concept("Root".into(), None, None).unwrap();
+        for (i, name) in HOSTILE.iter().enumerate() {
+            let due = crate::model::task::parse_due("2025-03-15", "UTC").unwrap();
+            let id = p.add_task((*name).to_string(), None, Some(i as f64 + 1.0), Some(due));
+            p.link_concept(id, root).unwrap();
+        }
+        p
+    }
+
+    /// Every declaration must occupy exactly one line: an embedded newline
+    /// would otherwise split it and silently change the diagram.
+    fn assert_no_stray_blank_or_split_lines(out: &str, what: &str) {
+        for line in out.lines() {
+            assert!(
+                !line.starts_with("line two"),
+                "{what}: a name's newline split a declaration:\n{out}"
+            );
+        }
+    }
+
+    #[test]
+    fn hostile_names_keep_component_quotes_balanced() {
+        let out = dag(&hostile_project(), None);
+        for line in out.lines().filter(|l| l.starts_with("component ")) {
+            assert_eq!(
+                line.matches('"').count(),
+                2,
+                "unbalanced quotes in: {line}\n{out}"
+            );
+        }
+        assert_no_stray_blank_or_split_lines(&out, "dag");
+    }
+
+    #[test]
+    fn hostile_names_keep_gantt_brackets_balanced() {
+        for out in [gantt(&hostile_project()), {
+            // Also exercise the schedule-driven branch.
+            let mut p = hostile_project();
+            p.add_dependency(TaskId(2), TaskId(1)).unwrap();
+            gantt(&p)
+        }] {
+            for line in out.lines().filter(|l| l.starts_with('[')) {
+                assert_eq!(
+                    line.matches('[').count(),
+                    line.matches(']').count(),
+                    "unbalanced brackets in: {line}\n{out}"
+                );
+            }
+            assert_no_stray_blank_or_split_lines(&out, "gantt");
+        }
+    }
+
+    #[test]
+    fn hostile_names_do_not_break_mindmap_or_wbs_structure() {
+        let p = hostile_project();
+        for (what, out) in [("tree", tree(&p, None)), ("wbs", wbs(&p, None))] {
+            for line in out.lines() {
+                if line.starts_with("@") || line.is_empty() {
+                    continue;
+                }
+                assert!(
+                    line.starts_with('*'),
+                    "{what}: a name leaked a line without a depth marker: {line:?}\n{out}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_whitespace_only_name_still_gets_a_label() {
+        let mut p = Project::new();
+        p.add_task("   ".into(), None, Some(1.0), None);
+        let out = dag(&p, None);
+        assert!(out.contains(UNNAMED), "{out}");
+    }
+
+    #[test]
+    fn duplicate_task_names_stay_distinct_in_the_gantt() {
+        // The C9 regression: identifying tasks by name merged these two and
+        // emitted `[X] starts at [X]'s end` — a dependency that never existed.
+        let mut p = Project::new();
+        p.add_task("Same".into(), None, Some(1.0), None); // 1
+        p.add_task("Same".into(), None, Some(1.0), None); // 2
+        p.add_dependency(TaskId(2), TaskId(1)).unwrap();
+        let out = gantt(&p);
+
+        assert!(out.contains("[Same] as [t1] lasts"), "{out}");
+        assert!(out.contains("[Same] as [t2] lasts"), "{out}");
+        assert!(out.contains("[t2] starts at [t1]'s end"), "{out}");
+        // No constraint may name the same alias on both sides.
+        for line in out.lines().filter(|l| l.contains("starts at")) {
+            let (lhs, rhs) = line.split_once(" starts at ").unwrap();
+            assert_ne!(
+                lhs.trim(),
+                rhs.trim_end_matches("'s end"),
+                "self-dependency: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn label_sanitisers_are_minimal() {
+        // Ordinary names must pass through untouched — the fix must not
+        // rewrite the 184 real names in a live project.
+        for name in ["Plain name", "Fix (10.0.7.0/24) overlap", "a - b — c"] {
+            assert_eq!(one_line(name), name);
+            assert_eq!(quoted_label(name), name);
+            assert_eq!(bracket_label(name), name);
+        }
+        assert_eq!(one_line("a\n b\tc"), "a b c");
+        assert_eq!(quoted_label(r#"say "hi""#), "say 'hi'");
+        assert_eq!(bracket_label("[x]"), "(x)");
+        assert_eq!(one_line("  "), UNNAMED);
     }
 }

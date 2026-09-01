@@ -2,7 +2,8 @@
 //!
 //! Supported formats:
 //! - [`Format::PlantUml`] — generates PlantUML syntax for tree, DAG, Gantt, and WBS diagrams.
-//! - [`Format::Mermaid`] — stubbed for future implementation.
+//! - [`Format::Mermaid`] — accepted but not implemented; every call returns
+//!   `Err`, so a script never mistakes a placeholder for a diagram.
 
 pub mod mermaid;
 pub mod plantuml;
@@ -155,16 +156,16 @@ fn render_mermaid(
     match kind {
         DiagramKind::Tree => {
             let root_id = parse_concept_root(project, root)?;
-            Ok(mermaid::tree(project, root_id))
+            mermaid::tree(project, root_id)
         }
         DiagramKind::Dag => {
             let root_id = parse_task_root(project, root)?;
-            Ok(mermaid::dag(project, root_id))
+            mermaid::dag(project, root_id)
         }
-        DiagramKind::Gantt => Ok(mermaid::gantt(project)),
+        DiagramKind::Gantt => mermaid::gantt(project),
         DiagramKind::Wbs => {
             let root_id = parse_concept_root(project, root)?;
-            Ok(mermaid::wbs(project, root_id))
+            mermaid::wbs(project, root_id)
         }
     }
 }
