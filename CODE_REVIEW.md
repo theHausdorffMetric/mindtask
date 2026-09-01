@@ -37,11 +37,16 @@ directly, and `load` (`src/store/json.rs:28`) never validates. A hand-edited
 `.mindtask.json` with a cyclic `parent` chain + any `concept mv` → hang.
 Fix: add a visited set (mirror `validate_tree`) or bound the walk.
 
-### C2. Non-atomic saves risk data loss — `src/store/json.rs:39`
-`save` does `std::fs::write`, which truncates then writes in place. An interrupt
+### C2. Non-atomic saves risk data loss — `src/store/json.rs:39` — ✅ FIXED
+`save` did `std::fs::write`, which truncates then writes in place. An interrupt
 / crash / full disk mid-write corrupts or empties the project file — the single
-source of truth. Fix: write to a sibling temp file, then `fs::rename` onto the
-target (atomic on the same filesystem).
+source of truth. Now written to a `NamedTempFile` alongside the target,
+`sync_all`'d, then `persist`ed (rename) over it, with the parent directory
+fsynced so the rename survives power loss; the replaced file's mode is carried
+over so an atomic replace can't silently tighten permissions. A failed save
+leaves the previous file intact. Note the inherent trade-off: temp+rename needs
+write permission on the *directory*, which an in-place write did not — a save
+into a read-only directory now fails loudly instead of succeeding.
 
 ### C3. `load` never validates — `src/store/json.rs:28` — ✅ FIXED
 The CLI `load_project` helper (`src/cli/mod.rs`) now runs `validate_project`

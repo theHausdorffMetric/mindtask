@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Saves are now atomic** (code review C2). `save` used `std::fs::write`, which
+  truncates the target and then rewrites it in place: an interrupt, crash, or
+  full disk mid-write could leave `.mindtask.json` — the single source of truth
+  for a whole project — truncated or half-written. The new contents now go to a
+  temp file in the same directory, are flushed with `sync_all`, and only then
+  replace the target via rename; the parent directory is fsynced so a save that
+  reported success survives power loss. A failed save leaves the previous file
+  untouched.
+- Write failures no longer report themselves as read failures: `StoreError`
+  gained a `WriteError` variant, so a full disk during save surfaces as
+  "failed to write project file" rather than "failed to read project file".
+
+### Changed
+- `tempfile` moved from a dev-dependency to a runtime dependency (it backs the
+  atomic save).
+- Saving into a **read-only directory now fails** instead of succeeding.
+  Temp-file-plus-rename requires write permission on the directory, which an
+  in-place write did not; this is inherent to atomic replacement. The failure is
+  loud rather than falling back to a truncating write, which would reintroduce
+  exactly the corruption risk C2 describes.
+- Replacing an existing project file keeps its permission bits, so an atomic
+  replace cannot silently tighten a 0644 file to the temp file's 0600. A newly
+  created file is now 0600 rather than umask-dependent (typically 0644) — a
+  safer default for a data file, and a no-op under a 0077 umask.
+
 ## [0.9.0] - 2026-09-01
 
 ### Added
