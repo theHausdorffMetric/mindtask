@@ -1,11 +1,21 @@
 # mindtask — Status
 
-## Current Phase: Scheduling (Phase 6) + graph import + description output (0.9.0)
+## Current Phase: Scheduling (Phase 6) + graph import + description output (0.10.0)
 
 Phases 1–6 are implemented: data model, concept tree, task DAG, CLI, PlantUML
 diagram export, concept subtree reporting, and CPM scheduling (earliest/latest
 times, slack, critical path) surfaced by `mindtask schedule` and the
 schedule-driven Gantt.
+
+**0.10.0 (2026-09-01): data safety + output correctness** — closes phases 1-2
+of the 0.9.0 architecture review ([CODE_REVIEW-0.9.0.md](CODE_REVIEW-0.9.0.md)).
+Saves are atomic (temp file + fsync + rename), so an interrupt or full disk can
+no longer truncate the project file. The Gantt export identifies tasks by ID
+alias rather than by name, which previously made two same-named tasks emit a
+self-dependency PlantUML happily drew. Names are sanitised before entering
+diagram syntax. `export mermaid` exits non-zero instead of printing a
+placeholder. Two small library API changes; the CLI surface is unchanged.
+Not yet published to crates.io.
 
 **0.9.0 (2026-09-01): description output** — descriptions were reachable only
 through `task show`, one task at a time, and printed unwrapped. `-d` now works

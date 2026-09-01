@@ -6,30 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-- **The Gantt export no longer identifies tasks by name** (code review C9).
-  Task names are not unique, so two tasks sharing one collapsed into a single
-  PlantUML identifier — and a dependency between them emitted
-  `[X] starts at [X]'s end`, a self-dependency the project does not contain.
-  PlantUML *accepts* that, so the rendered chart was wrong rather than
-  rejected. Tasks are now declared once as `[name] as [t<id>]` and addressed
-  only by that alias, matching what the `dag` export already did.
-- **Names are sanitised before being written into diagram syntax** (C8).
-  A `"` closed a component label early, `[`/`]` unbalanced a Gantt label, and
-  an embedded newline split one declaration across two lines. PlantUML has no
-  escape mechanism for these, so offending characters are substituted with
-  visually equivalent safe ones (`"`→`'`, `[`/`]`→`(`/`)`, whitespace runs
-  collapsed); a name that sanitises to nothing renders as `(unnamed)`.
-  Verified no-op on real data: `tree`, `dag`, and `wbs` output is byte-identical
-  for a 46-concept/135-task project.
-- **`export mermaid` now fails instead of reporting success** (C5, open since
-  the v0.2.1 review). Every mermaid path returned `Ok("… not yet implemented")`
-  with exit status 0, which a script could not distinguish from a real diagram.
-  It now returns an error and exits non-zero, writing nothing to stdout.
+## [0.10.0] - 2026-09-01
 
-### Changed
-- `mindtask::export::mermaid`'s four entry points return
-  `Result<String, String>` rather than `String`.
+Data-safety and output-correctness release, closing the first two phases of the
+0.9.0 architecture review. Two small library API changes make this a minor
+rather than a patch bump; the CLI surface is unchanged.
 
 ### Fixed
 - **Saves are now atomic** (code review C2). `save` used `std::fs::write`, which
@@ -43,19 +24,50 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Write failures no longer report themselves as read failures: `StoreError`
   gained a `WriteError` variant, so a full disk during save surfaces as
   "failed to write project file" rather than "failed to read project file".
+- **The Gantt export no longer identifies tasks by name** (C9). Task names are
+  not unique, so two tasks sharing one collapsed into a single PlantUML
+  identifier — and a dependency between them emitted `[X] starts at [X]'s end`,
+  a self-dependency the project does not contain. PlantUML *accepts* that, so
+  the rendered chart was wrong rather than rejected. Tasks are now declared once
+  as `[name] as [t<id>]` and addressed only by that alias, matching what the
+  `dag` export already did.
+- **Names are sanitised before being written into diagram syntax** (C8). A `"`
+  closed a component label early, `[`/`]` unbalanced a Gantt label, and an
+  embedded newline split one declaration across two lines. PlantUML has no
+  escape mechanism for these, so offending characters are substituted with
+  visually equivalent safe ones (`"`→`'`, `[`/`]`→`(`/`)`, whitespace runs
+  collapsed); a name that sanitises to nothing renders as `(unnamed)`. Verified
+  a no-op on ordinary names: `tree`, `dag`, and `wbs` output is byte-identical
+  to 0.9.0 for a real 46-concept/135-task project.
+- **`export mermaid` now fails instead of reporting success** (C5, open since
+  the v0.2.1 review). Every mermaid path returned `Ok("… not yet implemented")`
+  with exit status 0, which a script could not distinguish from a real diagram.
+  It now returns an error and exits non-zero, writing nothing to stdout.
 
 ### Changed
-- `tempfile` moved from a dev-dependency to a runtime dependency (it backs the
-  atomic save).
-- Saving into a **read-only directory now fails** instead of succeeding.
-  Temp-file-plus-rename requires write permission on the directory, which an
-  in-place write did not; this is inherent to atomic replacement. The failure is
-  loud rather than falling back to a truncating write, which would reintroduce
-  exactly the corruption risk C2 describes.
+- **Breaking (library API):** `mindtask::export::mermaid`'s four entry points
+  return `Result<String, String>` rather than `String`.
+- **Breaking (library API):** `mindtask::store::json::StoreError` gained a
+  `WriteError` variant, so exhaustive matches on it need a new arm.
+- **Behaviour:** saving into a read-only directory now fails instead of
+  succeeding. Temp-file-plus-rename requires write permission on the
+  *directory*, which an in-place write did not; this is inherent to atomic
+  replacement. The failure is loud rather than falling back to a truncating
+  write, which would reintroduce exactly the corruption risk C2 describes.
 - Replacing an existing project file keeps its permission bits, so an atomic
   replace cannot silently tighten a 0644 file to the temp file's 0600. A newly
   created file is now 0600 rather than umask-dependent (typically 0644) — a
   safer default for a data file, and a no-op under a 0077 umask.
+- `tempfile` moved from a dev-dependency to a runtime dependency (it backs the
+  atomic save).
+
+### Documentation
+- Full architecture and code review at [`CODE_REVIEW-0.9.0.md`], re-verifying
+  every finding of the v0.2.1 review against current code (five it listed as
+  open were already fixed) and adding an architecture section the original
+  lacked. The v0.2.1 file gains a forward pointer.
+
+[`CODE_REVIEW-0.9.0.md`]: CODE_REVIEW-0.9.0.md
 
 ## [0.9.0] - 2026-09-01
 
