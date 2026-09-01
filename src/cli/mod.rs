@@ -16,6 +16,7 @@ use clap::{Parser, Subcommand};
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::task::TaskState;
 
+use render::DescMode;
 use state_filter::{StateArg, StateFilter};
 
 const PROJECT_FILE: &str = ".mindtask.json";
@@ -74,7 +75,7 @@ enum Command {
     Search {
         /// Search query (case-insensitive substring match)
         query: String,
-        /// Also search description fields
+        /// Also search descriptions, and show the matching excerpt
         #[arg(short, long)]
         description: bool,
     },
@@ -89,9 +90,17 @@ enum Command {
     },
     /// Report the whole project: concept tree followed by the task list
     Report {
-        /// Show concept descriptions below each node in the tree
-        #[arg(short, long)]
-        description: bool,
+        /// Show descriptions: bare for the full text, `=short` for a
+        /// one-line lede
+        #[arg(
+            short,
+            long,
+            value_name = "MODE",
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "full"
+        )]
+        description: Option<DescMode>,
         /// Show only tasks in these states: todo, in_progress, done, or all
         /// (comma-separated or repeated)
         #[arg(
@@ -186,9 +195,17 @@ enum ConceptCommand {
     Tree {
         /// Root concept ID to display a subtree (e.g. 1)
         id: Option<ConceptId>,
-        /// Show concept descriptions below each node in the tree
-        #[arg(short, long)]
-        description: bool,
+        /// Show descriptions: bare for the full text, `=short` for a
+        /// one-line lede
+        #[arg(
+            short,
+            long,
+            value_name = "MODE",
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "full"
+        )]
+        description: Option<DescMode>,
     },
     /// Show details of a concept
     Show {
@@ -199,9 +216,17 @@ enum ConceptCommand {
     Report {
         /// Root concept ID (e.g. 1)
         id: ConceptId,
-        /// Show concept descriptions below each node in the tree
-        #[arg(short, long)]
-        description: bool,
+        /// Show descriptions: bare for the full text, `=short` for a
+        /// one-line lede
+        #[arg(
+            short,
+            long,
+            value_name = "MODE",
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "full"
+        )]
+        description: Option<DescMode>,
         /// Show only tasks in these states: todo, in_progress, done, or all
         /// (comma-separated or repeated)
         #[arg(
@@ -275,6 +300,17 @@ enum TaskCommand {
             default_value = "todo,in_progress"
         )]
         state: Vec<StateArg>,
+        /// Show descriptions: bare for the full text, `=short` for a
+        /// one-line lede
+        #[arg(
+            short,
+            long,
+            value_name = "MODE",
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "full"
+        )]
+        description: Option<DescMode>,
     },
     /// Show details of a task
     Show {
@@ -402,9 +438,10 @@ pub fn run() -> Result<()> {
         Command::Report { description, state } => {
             let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
+            let description = description.unwrap_or_default();
             concept::tree(&proj, None, description)?;
             println!();
-            task::list(&proj, &StateFilter::new(&state));
+            task::list(&proj, &StateFilter::new(&state), description);
             Ok(())
         }
         Command::Schedule { critical } => {
@@ -447,7 +484,7 @@ pub fn run() -> Result<()> {
                     return Ok(());
                 }
                 ConceptCommand::Tree { id, description } => {
-                    concept::tree(&proj, id, description)?;
+                    concept::tree(&proj, id, description.unwrap_or_default())?;
                     return Ok(());
                 }
                 ConceptCommand::Show { id } => {
@@ -459,7 +496,12 @@ pub fn run() -> Result<()> {
                     description,
                     state,
                 } => {
-                    concept::report(&proj, id, description, &StateFilter::new(&state))?;
+                    concept::report(
+                        &proj,
+                        id,
+                        description.unwrap_or_default(),
+                        &StateFilter::new(&state),
+                    )?;
                     return Ok(());
                 }
                 ConceptCommand::Normalize { dry_run } => {
@@ -499,8 +541,12 @@ pub fn run() -> Result<()> {
                     clear_duration,
                 )?,
                 TaskCommand::Rm { id } => task::remove(&mut proj, id)?,
-                TaskCommand::Ls { state } => {
-                    task::list(&proj, &StateFilter::new(&state));
+                TaskCommand::Ls { state, description } => {
+                    task::list(
+                        &proj,
+                        &StateFilter::new(&state),
+                        description.unwrap_or_default(),
+                    );
                     return Ok(());
                 }
                 TaskCommand::Show { id } => {

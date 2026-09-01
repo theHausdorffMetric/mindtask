@@ -7,9 +7,11 @@ use mindtask::model::concept::Concept;
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::{Placement, Project};
 
-use super::render::{MIN_WRAP_WIDTH, hard_wrap, render_table, resolve_wrap_width};
+use super::render::{
+    DescMode, avail_width, desc_text, render_table, render_table_with_blocks, resolve_wrap_width,
+};
 use super::state_filter::{StateFilter, hidden_footer};
-use super::task::task_cells;
+use super::task::{task_cells, task_desc_block};
 
 pub fn add(
     project: &mut Project,
@@ -232,7 +234,7 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
     Ok(())
 }
 
-pub fn tree(project: &Project, root_id: Option<ConceptId>, show_desc: bool) -> Result<()> {
+pub fn tree(project: &Project, root_id: Option<ConceptId>, show_desc: DescMode) -> Result<()> {
     if project.concepts.is_empty() {
         println!("No concepts.");
         return Ok(());
@@ -265,24 +267,26 @@ const INDENT_PER_DEPTH: usize = 4;
 fn build_tree(
     project: &Project,
     concept: &Concept,
-    show_desc: bool,
+    show_desc: DescMode,
     width: usize,
     depth: usize,
 ) -> Tree<String> {
-    let mut node = match (show_desc, &concept.description) {
-        (true, Some(desc)) => {
-            // Render the description on the line(s) below the concept; termtree's
-            // multiline mode indents continuation lines to line up with the branch.
-            // The branch prefix consumes `depth * INDENT_PER_DEPTH` columns, so wrap
-            // the bracketed description to whatever width remains.
-            let avail = width
-                .saturating_sub(depth * INDENT_PER_DEPTH)
-                .max(MIN_WRAP_WIDTH);
-            let wrapped = hard_wrap(&format!("[{desc}]"), avail);
-            Tree::new(format!("{} {{{}}}\n{wrapped}", concept.name, concept.id))
-                .with_multiline(true)
+    // Render the description on the line(s) below the concept; termtree's
+    // multiline mode indents continuation lines to line up with the branch. The
+    // branch prefix already consumes `depth * INDENT_PER_DEPTH` columns, so fit
+    // the description to whatever width remains and add no padding of our own.
+    let rendered = concept.description.as_deref().and_then(|desc| {
+        desc_text(
+            desc,
+            show_desc,
+            avail_width(width, depth * INDENT_PER_DEPTH),
+        )
+    });
+    let mut node = match rendered {
+        Some(text) => {
+            Tree::new(format!("{} {{{}}}\n{text}", concept.name, concept.id)).with_multiline(true)
         }
-        _ => Tree::new(format!("{} {{{}}}", concept.name, concept.id)),
+        None => Tree::new(format!("{} {{{}}}", concept.name, concept.id)),
     };
     for child in project.children_of(concept.id) {
         node.push(build_tree(project, child, show_desc, width, depth + 1));
@@ -324,7 +328,7 @@ fn collect_upstream_tasks(project: &Project, seed: &HashSet<TaskId>) -> HashSet<
 pub fn report(
     project: &Project,
     id: ConceptId,
-    show_desc: bool,
+    show_desc: DescMode,
     filter: &StateFilter,
 ) -> Result<()> {
     let root = project
@@ -410,13 +414,18 @@ pub fn report(
                 cells
             })
             .collect();
+        let blocks: Vec<Option<String>> = tasks
+            .iter()
+            .map(|&task| task_desc_block(task, show_desc, width))
+            .collect();
         println!(
             "{}",
-            render_table(
+            render_table_with_blocks(
                 &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", ""],
                 &rows,
+                &blocks,
                 Some(1),
-                resolve_wrap_width(project),
+                width,
             )
         );
     }

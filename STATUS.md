@@ -1,11 +1,19 @@
 # mindtask — Status
 
-## Current Phase: Scheduling (Phase 6) + graph import (0.8.0)
+## Current Phase: Scheduling (Phase 6) + graph import + description output (0.9.0)
 
 Phases 1–6 are implemented: data model, concept tree, task DAG, CLI, PlantUML
 diagram export, concept subtree reporting, and CPM scheduling (earliest/latest
 times, slack, critical path) surfaced by `mindtask schedule` and the
 schedule-driven Gantt.
+
+**0.9.0 (2026-09-01): description output** — descriptions were reachable only
+through `task show`, one task at a time, and printed unwrapped. `-d` now works
+on `task ls` and on the task half of `report`/`concept report` (it previously
+reached only the concept tree), with `--description=short` for a one-line lede;
+`search -d` prints the excerpt that matched instead of silently widening
+recall; `task show` wraps to the resolved width; and wrapping is word-aware
+throughout. Not yet published to crates.io.
 
 **0.8.0 (2026-08-02): `mindtask import`** — consumes a typed concept-graph
 JSONL stream (the `pdfdex graph --format jsonl` contract) and merges its

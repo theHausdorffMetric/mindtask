@@ -67,7 +67,7 @@ mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
 mindtask config wrap-width [<COLS>]     # Get or set the description wrap width
 mindtask config wrap-width --clear      # Revert to terminal-width auto-detection
-mindtask report [-d|--description] [--state <STATE,...>]  # Whole project: concept tree + task list
+mindtask report [-d|--description[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + task list
 ```
 
 Any command accepts the global `-f`/`--file <PATH>` flag to target a specific project file instead of searching from the current directory.
@@ -83,17 +83,15 @@ mindtask concept rm <ID>
 mindtask concept mv <ID> --parent <ID|root>          # Re-parent (append to new parent's children)
 mindtask concept mv <ID> --before <SIB>|--after <SIB> # Position among siblings (parent taken from SIB)
 mindtask concept ls
-mindtask concept tree [<ID>] [-d|--description]
+mindtask concept tree [<ID>] [-d|--description[=short|full]]
 mindtask concept show <ID>
-mindtask concept report <ID> [-d|--description] [--state <STATE,...>]
+mindtask concept report <ID> [-d|--description[=short|full]] [--state <STATE,...>]
 mindtask concept normalize [--dry-run]               # Renumber IDs to 1..n in tree (DFS pre-order) order
 ```
 
 Removing a concept fails if it has children or is referenced by tasks — unlink or remove dependents first.
 
 Concepts print in file (array) order, not by ID. Sibling order therefore follows the file: `concept mv --before/--after` repositions a concept among siblings (taking the new parent from the anchor), and `concept normalize` rewrites IDs to `1..n` in the exact order `tree` prints — remapping `parent` and task→concept links in step — as an on-demand tidy after reordering. `--dry-run` previews the old→new mapping without writing.
-
-Pass `-d`/`--description` to `concept tree`, `concept report`, or the top-level `report` to print each concept's description on the line below the node, indented to line up with the tree branches. Long descriptions are hard-wrapped to fit the available width, which follows the terminal (falling back to 80 columns when the width is unknown, e.g. piped output). Set a fixed width with `config wrap-width <COLS>` to override detection, or `config wrap-width --clear` to go back to auto-detection.
 
 `concept report` shows the concept subtree, all tasks linked to concepts in that subtree, and all transitive upstream dependencies (tasks required by those tasks, even if linked to concepts outside the subtree). Upstream-only tasks are marked `(upstream dep)`. The task table honors the `--state` filter (see [Tasks](#tasks)): hidden direct tasks don't pull their dependency chains into the report.
 
@@ -105,7 +103,7 @@ Tasks form a dependency DAG. Each task has a workflow state (`todo`, `in_progres
 mindtask task add <NAME> [--description <TEXT>] [--duration <DAYS>] [--due <DATE>] [--concept <ID>]...
 mindtask task edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-description] [--duration <DAYS>] [--clear-duration]
 mindtask task rm <ID>
-mindtask task ls [--state <STATE,...>]
+mindtask task ls [--state <STATE,...>] [-d|--description[=short|full]]
 mindtask task show <ID>
 mindtask task state <ID> <todo|in_progress|done>
 mindtask task due <ID> <DATE>
@@ -118,6 +116,29 @@ Due dates accept multiple formats:
 - Date only: `2025-03-15` (midnight in project timezone)
 - Datetime: `2025-03-15T14:00` (uses project timezone)
 - Full RFC 9557: `2025-03-15T14:00:00-04:00[America/New_York]`
+
+### Descriptions
+
+Pass `-d`/`--description` to `concept tree`, `concept report`, `task ls`, or the top-level `report` to print each description on the line(s) below its node or row, bracketed and indented. On `report` and `concept report` the flag covers both halves of the output — the concept tree *and* the task table.
+
+Descriptions are prose, so they render as a block beneath a row rather than as a table column, and every row stays one line so the columns still align. Two densities are available:
+
+| Form | Shows |
+| --- | --- |
+| `-d`, `--description` | The full text, wrapped over as many lines as it needs |
+| `--description=short` | A one-line lede per entity, elided with `…` |
+
+Reach for `=short` on large projects: full descriptions can easily multiply the length of a `report`.
+
+Wrapping is word-aware — a token too long to fit (a URL, a long path) is split rather than allowed to overflow — and fits the available width, which follows the terminal (falling back to 80 columns when the width is unknown, e.g. piped output). Set a fixed width with `config wrap-width <COLS>` to override detection, or `config wrap-width --clear` to go back to auto-detection.
+
+**The `=` is required** when selecting a mode: `-d=short` and
+`--description=short` work, but `-d short` fails with
+`unexpected argument 'short' found`.
+
+To read a single task's description in full, use `task show <ID>` — it wraps to
+the same resolved width. To find which items mention a term, see
+[Search](#search).
 
 ### Dependencies
 
@@ -141,7 +162,17 @@ Links are many-to-many: a task can reference multiple concepts, and a concept ca
 
 ```sh
 mindtask search <QUERY>                  # Search by name (case-insensitive)
-mindtask search <QUERY> -d|--description  # Also search description fields
+mindtask search <QUERY> -d|--description  # Also search descriptions, and show the matching excerpt
+```
+
+With `-d`, a row whose *description* matched is followed by an excerpt of the
+surrounding text, with `…` marking each trimmed end — so a hit is never a black
+box, and an unexpected substring match explains itself:
+
+```
+ID   NAME                                       STATE  DUE  DEPENDS ON  CONCEPTS
+111  Fix Container Station lxdbr0 / Virtual S…  done   -    -           40
+     …4 deletion), 10.0.7.1 no longer answers ARP from the LAN — verified from …
 ```
 
 ### Scheduling
@@ -158,6 +189,28 @@ mindtask schedule --critical   # only the critical-path tasks
 Times are day-offsets from the project start. Tasks without a `--duration` are
 treated as zero-day milestones; if no task has a duration there is nothing to
 schedule and the command says so.
+
+### Import
+
+Merge a typed concept-graph JSONL stream (the contract `pdfdex graph --format
+jsonl` emits — one JSON object per line) into the concept tree as a strict
+subtree.
+
+```sh
+mindtask import <FILE|-> --under <ID> [--min-docs <N>] [--reparent] [--dry-run]
+```
+
+The importer takes the graph's `is-a` edges and projects that sub-DAG onto a
+tree merged under concept `<ID>`: multi-parent nodes keep their highest-weight
+parent, cycles are broken at their weakest edge, and parentless concepts are
+grouped under a category umbrella. `--min-docs <N>` drops nodes seen in fewer
+than `N` documents (default 1).
+
+Merging is by name within the target subtree and **add-only by default** —
+existing concepts are never moved or deleted. When a projected parent differs
+from the current one, the drift is reported but not applied unless you pass
+`--reparent`. `--dry-run` prints the full projection and merge report without
+writing anything.
 
 ### Export
 

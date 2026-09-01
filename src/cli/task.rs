@@ -4,7 +4,9 @@ use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
 use mindtask::model::task::{Task, TaskState, parse_due};
 
-use super::render::{render_table, resolve_wrap_width};
+use super::render::{
+    DESC_INDENT, DescMode, desc_block, render_table_with_blocks, resolve_wrap_width, wrap_block,
+};
 use super::state_filter::{StateFilter, hidden_footer};
 
 /// Format a Zoned datetime for display, converting to the project timezone.
@@ -63,6 +65,16 @@ pub(super) fn task_cells(task: &Task, project: &Project) -> Vec<String> {
         due,
         join_ids(&task.depends_on),
     ]
+}
+
+/// The description block that sits beneath a task's table row, or `None` when
+/// the task has no description or none was requested. Shared by every task
+/// listing — `task ls`, `search`, and `concept report` — so `-d` renders
+/// identically wherever tasks are tabulated.
+pub(super) fn task_desc_block(task: &Task, mode: DescMode, width: usize) -> Option<String> {
+    task.description
+        .as_deref()
+        .and_then(|desc| desc_block(desc, mode, DESC_INDENT, width))
 }
 
 pub fn add(
@@ -155,7 +167,7 @@ pub fn remove(project: &mut Project, id: TaskId) -> Result<()> {
     Ok(())
 }
 
-pub fn list(project: &Project, filter: &StateFilter) {
+pub fn list(project: &Project, filter: &StateFilter, desc: DescMode) {
     if project.tasks.is_empty() {
         println!("No tasks.");
         return;
@@ -167,6 +179,7 @@ pub fn list(project: &Project, filter: &StateFilter) {
     if shown.is_empty() {
         println!("No tasks in the selected states.");
     } else {
+        let width = resolve_wrap_width(project);
         let rows: Vec<Vec<String>> = shown
             .iter()
             .map(|&task| {
@@ -175,13 +188,18 @@ pub fn list(project: &Project, filter: &StateFilter) {
                 cells
             })
             .collect();
+        let blocks: Vec<Option<String>> = shown
+            .iter()
+            .map(|&task| task_desc_block(task, desc, width))
+            .collect();
         println!(
             "{}",
-            render_table(
+            render_table_with_blocks(
                 &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", "CONCEPTS"],
                 &rows,
+                &blocks,
                 Some(1),
-                resolve_wrap_width(project),
+                width,
             )
         );
     }
@@ -198,7 +216,14 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
     println!("ID:          {}", task.id);
     println!("Name:        {}", task.name);
     if let Some(desc) = &task.description {
-        println!("Description: {}", desc);
+        // Descriptions run to paragraphs, so wrap to the configured/terminal
+        // width instead of emitting one unbounded line. Continuation lines are
+        // indented to the value column, keeping the label edge clean.
+        const LABEL: &str = "Description: ";
+        let block = wrap_block(desc, LABEL.len(), resolve_wrap_width(project));
+        // The block's first line carries the indent that the label replaces.
+        // The pad is ASCII spaces, so slicing at the label's byte length is safe.
+        println!("{LABEL}{}", &block[LABEL.len()..]);
     }
     if let Some(dur) = task.duration {
         println!("Duration:    {} days", dur);

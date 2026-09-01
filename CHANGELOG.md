@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-01
+
+### Added
+- `-d`/`--description` on `task ls`, and on the *task* half of `report` and
+  `concept report` — previously the flag reached only the concept tree, so a
+  task's description was visible nowhere but `task show`. Descriptions render
+  as a bracketed, indented block beneath their row (rows stay one line, so
+  table columns still align), matching how the concept tree already shows them.
+- `--description=short` on every command that takes `-d`: a one-line lede per
+  entity, elided with `…`. Bare `-d` keeps its existing meaning (full text).
+  Full descriptions can multiply the length of a `report` on a large project;
+  `=short` keeps it scannable.
+- `search -d` now prints an excerpt of the text around the match, with `…`
+  marking each trimmed end. The flag previously widened the search to
+  descriptions but showed nothing of what matched, so a hit — including an
+  unexpected substring match — was a black box.
+
+### Fixed
+- `task show` printed the description as a single unwrapped line, ignoring both
+  the detected terminal width and `config wrap-width`. It is now wrapped to the
+  resolved width, with continuation lines aligned under the value column.
+
+### Changed
+- Description wrapping is word-aware: lines break at whitespace instead of
+  mid-word. A token too long to fit (a URL, a long path) is still hard-split so
+  no line exceeds the width. This also affects `concept tree -d`.
+
+### Documentation
+- README and the bundled Claude skill both gained a dedicated **Descriptions**
+  section: `-d` is now a cross-cutting output flag rather than a concept-tree
+  footnote, and the `=` in `-d=short` is required (`-d short` is a parse error).
+- README documents `mindtask import`, which shipped in 0.8.0 undocumented there.
+- Skill `documents-version` pinned to 0.9.0 (enforced by `skill_doc_sync`).
+
 ## [0.8.0] - 2026-08-02
 
 ### Added

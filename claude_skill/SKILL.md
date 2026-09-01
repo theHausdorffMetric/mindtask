@@ -10,7 +10,7 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.8.0"
+  documents-version: "0.9.0"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
@@ -26,7 +26,7 @@ mindtask init [--timezone <IANA>]     # Create .mindtask.json
 mindtask validate                     # Check file integrity
 mindtask config timezone [TZ]         # Get/set timezone (--show to display)
 mindtask config wrap-width [COLS]     # Get/set description wrap width (--show to display, --clear to auto-detect)
-mindtask report [-d|--description] [--state <STATE,...>]  # Whole project: concept tree + task list
+mindtask report [-d[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + task list; -d adds descriptions to both halves
 ```
 
 ### Concepts (tree structure)
@@ -38,9 +38,9 @@ mindtask concept mv <ID> --parent <ID|root>          # Re-parent (append to new 
 mindtask concept mv <ID> --before <SIB> | --after <SIB> # Position among siblings (parent taken from SIB)
 mindtask concept edit <ID> [--name <NAME>] [--description <DESC>] [--clear-description]
 mindtask concept ls
-mindtask concept tree [ID] [-d]       # Full tree (or subtree); -d adds descriptions
+mindtask concept tree [ID] [-d[=short|full]]  # Full tree (or subtree); -d adds descriptions
 mindtask concept show <ID>
-mindtask concept report <ID> [-d] [--state <STATE,...>]  # Subtree + linked tasks + upstream deps; -d adds descriptions
+mindtask concept report <ID> [-d[=short|full]] [--state <STATE,...>]  # Subtree + linked tasks + upstream deps; -d adds descriptions
 mindtask concept normalize [--dry-run] # Renumber IDs to 1..n in tree (DFS pre-order) order
 ```
 
@@ -59,7 +59,7 @@ mindtask task add <NAME> [--description <DESC>] [--duration <DAYS>] [--due <DATE
 mindtask task rm <ID>
 mindtask task edit <ID> [--name <NAME>] [--description <DESC>] [--clear-description]
                         [--duration <DAYS>] [--clear-duration]
-mindtask task ls [--state <STATE,...>]
+mindtask task ls [--state <STATE,...>] [-d[=short|full]]
 mindtask task show <ID>
 mindtask task state <ID> <todo|in_progress|done>
 mindtask task due <ID> [DATE] [--clear]
@@ -72,6 +72,36 @@ comma-separated or repeated combination of `todo`, `in_progress`, `done`, or
 `(hidden: 12 done — --state all to show)`; dependency IDs in `DEPENDS ON`
 stay verbatim even when the referenced task's row is hidden. In
 `concept report`, hidden direct tasks don't pull their upstream chains in.
+
+### Descriptions (`-d`)
+
+`-d`/`--description` adds descriptions to `concept tree`, `concept report`,
+`task ls`, and `report`. On `report` and `concept report` it covers **both**
+halves — the concept tree *and* the task table.
+
+```
+mindtask task ls -d                   # full text, wrapped
+mindtask task ls -d=short             # one-line lede per task, elided with …
+mindtask report -d=short --state all  # scan a whole project
+```
+
+| Form | Shows |
+|------|-------|
+| `-d`, `--description` | Full text, wrapped over as many lines as needed |
+| `-d=short`, `--description=short` | One line per entity, truncated with `…` |
+| `-d=full` | Explicit form of bare `-d` |
+
+**The `=` is required.** `-d=short` works; `-d short` fails with
+`unexpected argument 'short' found`.
+
+Descriptions render as a bracketed block indented beneath their row or node —
+never as a table column — so rows stay one line and columns keep aligning.
+Prefer `=short` on a large project: full text can multiply the output length
+(on a 133-task project, `report --state all` runs 178 lines plain, 333 with
+`-d=short`, 1295 with `-d`).
+
+Wrapping is word-aware and follows `config wrap-width`, else the terminal, else
+80 columns. To read **one** task's description in full, use `task show <ID>`.
 
 ### Dependencies (between tasks)
 
@@ -104,10 +134,15 @@ mindtask unlink <TASK_ID> <CONCEPT_ID>
 ### Search
 
 ```
-mindtask search <QUERY> [-d]          # -d also searches descriptions
+mindtask search <QUERY> [-d]          # -d also searches descriptions, and shows the matching excerpt
 ```
 
-Case-insensitive substring match across concepts and tasks.
+Case-insensitive substring match across concepts and tasks. Plain `search`
+matches names only. With `-d` it also matches description text and prints an
+excerpt of the surrounding text beneath the row, `…` marking each trimmed end —
+so a hit always explains itself (including an unexpected substring match, e.g.
+`search ARP -d` matching "K**arp**athy"). Here `-d` is a plain boolean; it takes
+no `=short`/`=full` value.
 
 ### Import (concept-graph JSONL → concept subtree)
 
@@ -198,6 +233,8 @@ Due dates accept these formats:
 - Build the concept tree first, then add tasks, linking them at creation with `task add --concept <ID>` (repeatable) instead of a separate `link` step.
 - `add` commands echo the new ID (`Added task 1 "..."`); capture it from that output instead of re-running `search`/`ls`.
 - Use `mindtask concept tree` to review structure before exporting; add `-d` to see each concept's description inline.
+- To survey what a project is actually about, `mindtask report -d=short --state all` — one lede per concept and task. See [Descriptions](#descriptions--d); note the `=` is required.
+- To read one task's description in full, `mindtask task show <ID>`; to find which tasks mention something, `mindtask search <TERM> -d`, which prints the matching excerpt.
 - `mindtask export plantuml wbs` gives the richest view: concepts + tasks together.
 - Chain commands: add a task (with `--concept` to link it), set its dependency, then export.
 - Use `mindtask search` to find IDs of existing items before editing or linking.
