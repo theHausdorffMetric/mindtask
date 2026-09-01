@@ -214,7 +214,9 @@ writing anything.
 
 ### Export
 
-Generate diagrams for external renderers. Supported formats: `plantuml`, `mermaid` (stubbed).
+Generate diagrams for external renderers. **`plantuml` is the only implemented
+format.** `mermaid` is accepted as a value but every call returns an error and
+exits non-zero, so a script can never mistake a placeholder for a diagram.
 
 ```sh
 mindtask export <FORMAT> <DIAGRAM> [ROOT_ID]
@@ -248,6 +250,19 @@ mindtask export plantuml dag > dag.puml
 java -jar plantuml.jar -tsvg dag.puml
 ```
 
+#### Names in generated diagrams
+
+Names are user text written into diagram syntax that has no escape mechanism of
+its own, so a few characters are substituted to keep the output well-formed:
+whitespace runs (including newlines) collapse to a single space, `"` becomes
+`'` inside quoted labels, and `[`/`]` become `(`/`)` inside bracketed ones. A
+name that reduces to nothing renders as `(unnamed)`. Ordinary names pass
+through untouched.
+
+Tasks are identified in the output by their ID (`t<id>`), with the name used
+only as a display label — so two tasks sharing a name stay distinct in the
+generated chart.
+
 ## Data Model
 
 ```json
@@ -277,6 +292,14 @@ java -jar plantuml.jar -tsvg dag.puml
 
 Optional fields (`description`, `duration`, `due`, `depends_on`, `concepts`, `parent`) are omitted from the JSON when empty or unset.
 
+The file is written **atomically**: new contents go to a temp file alongside it,
+are flushed to disk, and only then replace the target by rename, with the parent
+directory fsynced so a save that reported success survives power loss. An
+interrupted or failed save leaves the previous file intact rather than truncated.
+This does mean a save needs write permission on the *directory*, not just the
+file — writing into a read-only directory fails rather than silently falling back
+to a truncating write. Replacing a file preserves its permission bits.
+
 ## Key Design Decisions
 
 | Decision | Choice | Why |
@@ -295,7 +318,7 @@ mindtask is also usable as a Rust library (`use mindtask::...`):
 - `mindtask::model` — `Project`, `Concept`, `Task`, typed IDs (`ConceptId`, `TaskId`)
 - `mindtask::graph` — Tree validation, DAG cycle detection, topological sort, project validation
 - `mindtask::store` — JSON persistence (load/save)
-- `mindtask::export` — Diagram generation (PlantUML, Mermaid stub)
+- `mindtask::export` — Diagram generation (PlantUML; Mermaid returns an error)
 
 ## License
 

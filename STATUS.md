@@ -104,7 +104,7 @@ Not yet published to crates.io.
 - [x] `mindtask export plantuml gantt` — tasks with due dates as PlantUML Gantt chart
 - [x] `mindtask export plantuml wbs` — concept tree with tasks as leaves (work breakdown structure)
 - [x] Optional root ID for tree and dag (render subtree/subgraph)
-- [x] Mermaid format stubbed for future implementation
+- [x] Mermaid format accepted as a value but unimplemented — every call errors (never emits a placeholder)
 - [x] Test fixture generator (`tests/fixtures/generate.sh`) and justfile for rendering
 
 ### Phase 6: Scheduling (CPM)
@@ -123,7 +123,7 @@ src/
   model/              # Concept, Task, Project, ID newtypes
   store/              # JSON persistence
   graph/              # tree validation, DAG cycle detection (petgraph)
-  export/             # diagram generation (PlantUML, Mermaid stub)
+  export/             # diagram generation (PlantUML; Mermaid errors)
   cli/                # clap definitions and command handlers
 ```
 

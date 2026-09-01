@@ -17,6 +17,11 @@ metadata:
 
 mindtask stores everything in a single `.mindtask.json` file in the current directory (the lookup does not walk up into parent directories). Any command accepts a global `-f`/`--file <PATH>` flag to target a specific project file instead.
 
+Writes are atomic (temp file → fsync → rename), so an interrupted save leaves
+the previous file intact. One consequence: saving needs write permission on the
+*directory*, not just the file, so a command that modifies the project fails in
+a read-only directory instead of silently succeeding.
+
 ## Command reference
 
 ### Project
@@ -97,8 +102,8 @@ mindtask report -d=short --state all  # scan a whole project
 Descriptions render as a bracketed block indented beneath their row or node —
 never as a table column — so rows stay one line and columns keep aligning.
 Prefer `=short` on a large project: full text can multiply the output length
-(on a 133-task project, `report --state all` runs 178 lines plain, 333 with
-`-d=short`, 1295 with `-d`).
+(on a real project, `report --state all` runs roughly 2x its plain length with
+`-d=short` and roughly 7x with `-d`).
 
 Wrapping is word-aware and follows `config wrap-width`, else the terminal, else
 80 columns. To read **one** task's description in full, use `task show <ID>`.
@@ -166,7 +171,14 @@ full projection and merge report without saving.
 mindtask export <FORMAT> <DIAGRAM> [ROOT]
 ```
 
-Formats: `plantuml`, `mermaid` (mermaid not yet implemented)
+Formats: **`plantuml` only.** `mermaid` parses as a value but every call
+returns an error and exits non-zero — it is not implemented, and never emits a
+placeholder you could mistake for a diagram.
+
+Names are sanitised on the way into diagram syntax (whitespace runs collapse,
+`"`→`'` in quoted labels, `[`/`]`→`(`/`)` in bracketed ones, `(unnamed)` for an
+empty result); ordinary names are untouched. Tasks are identified in the output
+by `t<id>` with the name as a display label, so same-named tasks stay distinct.
 
 Diagram types and what they show:
 
