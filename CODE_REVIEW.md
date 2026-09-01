@@ -1,4 +1,10 @@
-# mindtask — Code Review
+# mindtask — Code Review (v0.2.1)
+
+> **Superseded.** A full architecture and code review at v0.9.0 lives in
+> [`CODE_REVIEW-0.9.0.md`](CODE_REVIEW-0.9.0.md), which re-verifies every item
+> below against the current code. Five findings still marked open here (S1, S4,
+> I3, T1, and half of I2) are in fact fixed; three are genuinely carried
+> forward (C5, S3, I1). Treat the status markers in this file as historical.
 
 Reviewed at commit on `master` (v0.2.1). Grounding: `cargo build` clean,
 `cargo test` → 71 passed, `cargo clippy` → 1 warning.
