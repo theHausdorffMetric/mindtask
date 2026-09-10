@@ -277,5 +277,20 @@ rather than a patch bump; the CLI surface is unchanged.
   dependency graph: concept and task management, task dependencies, `search`,
   due dates with per-project timezone support, and JSON file storage.
 
-[0.4.0]: https://git.sr.ht/~danprobst/mindtask
-[0.3.1]: https://git.sr.ht/~danprobst/mindtask
+[Unreleased]: https://git.sr.ht/~danprobst/mindtask/log
+[0.10.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.10.0
+[0.9.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.9.0
+[0.8.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.8.0
+[0.7.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.7.0
+[0.6.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.6.0
+[0.5.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.5.1
+[0.5.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.5.0
+[0.4.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.4.1
+[0.4.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.4.0
+[0.3.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.3.1
+[0.3.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.3.0
+[0.2.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.2.0
+[0.1.3]: https://git.sr.ht/~danprobst/mindtask/log
+[0.1.2]: https://git.sr.ht/~danprobst/mindtask/refs/v0.1.2
+[0.1.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.1.1
+[0.1.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.1.0
