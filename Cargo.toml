@@ -2,6 +2,7 @@
 name = "mindtask"
 version = "0.10.1"
 edition = "2024"
+rust-version = "1.98"
 description = "A CLI tool combining mindmaps with task dependency graphs"
 license = "GPL-3.0-only"
 authors = ["Dan Probst <dan@probst.dev>"]
@@ -9,7 +10,7 @@ readme = "README.md"
 repository = "https://github.com/theHausdorffMetric/mindtask"
 keywords = ["cli", "mindmap", "task", "dag", "planning"]
 categories = ["command-line-utilities"]
-exclude = ["docs/", "STATUS.md", "CODE_REVIEW*.md", "justfile", "tests/fixtures/", "claude_skill/", "tests/skill_doc_sync.rs"]
+include = ["src/**", "tests/*.rs", "!tests/skill_doc_sync.rs", "/README.md", "/CHANGELOG.md", "/LICENSE"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

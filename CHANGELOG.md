@@ -15,6 +15,12 @@ Metadata-only release: no code changes.
   (<https://github.com/theHausdorffMetric/mindtask>); `repository` in
   `Cargo.toml` and the version links at the end of this changelog now point
   there. Older versions on crates.io keep their sourcehut link.
+- `Cargo.toml` now declares what ships with an `include` allowlist (sources,
+  the integration tests except the repo-only skill-doc guard, README,
+  CHANGELOG, LICENSE) instead of an `exclude` list, so a new file in the repo
+  root no longer lands in the crate by default, and states `rust-version =
+  "1.98"`. Package contents are unchanged except that `.gitignore` no
+  longer ships.
 
 ## [0.10.0] - 2026-09-01
 
