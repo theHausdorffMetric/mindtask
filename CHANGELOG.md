@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-13
+
+Metadata-only release: no code changes.
+
+### Changed
+- The repository moved from sourcehut to GitHub
+  (<https://github.com/theHausdorffMetric/mindtask>); `repository` in
+  `Cargo.toml` and the version links at the end of this changelog now point
+  there. Older versions on crates.io keep their sourcehut link.
+
 ## [0.10.0] - 2026-09-01
 
 Data-safety and output-correctness release, closing the first two phases of the
@@ -277,20 +287,21 @@ rather than a patch bump; the CLI surface is unchanged.
   dependency graph: concept and task management, task dependencies, `search`,
   due dates with per-project timezone support, and JSON file storage.
 
-[Unreleased]: https://git.sr.ht/~danprobst/mindtask/log
-[0.10.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.10.0
-[0.9.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.9.0
-[0.8.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.8.0
-[0.7.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.7.0
-[0.6.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.6.0
-[0.5.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.5.1
-[0.5.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.5.0
-[0.4.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.4.1
-[0.4.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.4.0
-[0.3.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.3.1
-[0.3.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.3.0
-[0.2.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.2.0
-[0.1.3]: https://git.sr.ht/~danprobst/mindtask/log
-[0.1.2]: https://git.sr.ht/~danprobst/mindtask/refs/v0.1.2
-[0.1.1]: https://git.sr.ht/~danprobst/mindtask/refs/v0.1.1
-[0.1.0]: https://git.sr.ht/~danprobst/mindtask/refs/v0.1.0
+[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.10.0
+[0.9.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.9.0
+[0.8.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.8.0
+[0.7.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.7.0
+[0.6.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.6.0
+[0.5.1]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.5.1
+[0.5.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.5.0
+[0.4.1]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.4.1
+[0.4.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.4.0
+[0.3.1]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.3.1
+[0.3.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.3.0
+[0.2.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.2.0
+[0.1.3]: https://github.com/theHausdorffMetric/mindtask/commits/master
+[0.1.2]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.1.2
+[0.1.1]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.1.1
+[0.1.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.1.0

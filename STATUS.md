@@ -2,6 +2,10 @@
 
 ## Current Phase: Scheduling (Phase 6) + graph import + description output (0.10.0)
 
+**0.10.1 (2026-09-13): metadata-only** — the repository moved from sourcehut to
+GitHub (`https://github.com/theHausdorffMetric/mindtask`); `Cargo.toml`
+`repository` and the changelog links follow. No code changes.
+
 Phases 1–6 are implemented: data model, concept tree, task DAG, CLI, PlantUML
 diagram export, concept subtree reporting, and CPM scheduling (earliest/latest
 times, slack, critical path) surfaced by `mindtask schedule` and the
