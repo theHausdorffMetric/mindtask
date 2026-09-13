@@ -20,9 +20,14 @@ pub fn add(
     description: Option<String>,
 ) -> Result<()> {
     let id = project
-        .add_concept(name.clone(), parent, description)
+        .add_concept(name, parent, description)
         .context("failed to add concept")?;
-    println!("Added concept {} \"{}\"", id, name);
+    // Echo the stored name: the model trims it.
+    let name = &project
+        .get_concept(id)
+        .expect("concept was just added")
+        .name;
+    println!("Added concept {id} \"{name}\"");
     Ok(())
 }
 

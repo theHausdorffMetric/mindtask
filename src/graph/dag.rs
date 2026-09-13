@@ -139,9 +139,9 @@ mod tests {
     #[test]
     fn topological_order_basic() {
         let mut p = Project::new();
-        p.add_task("A".into(), None, None, None);
-        p.add_task("B".into(), None, None, None);
-        p.add_task("C".into(), None, None, None);
+        p.add_task("A".into(), None, None, None).unwrap();
+        p.add_task("B".into(), None, None, None).unwrap();
+        p.add_task("C".into(), None, None, None).unwrap();
         p.add_dependency(TaskId(2), TaskId(1)).unwrap(); // B depends on A
         p.add_dependency(TaskId(3), TaskId(2)).unwrap(); // C depends on B
 
@@ -157,8 +157,8 @@ mod tests {
     fn validate_project_valid() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        let t1 = p.add_task("A".into(), None, None, None);
-        p.add_task("B".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
+        p.add_task("B".into(), None, None, None).unwrap();
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         p.link_concept(t1, ConceptId(1)).unwrap();
         assert!(validate_project(&p).is_ok());
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn validate_dag_invalid_ref() {
         let mut p = Project::new();
-        p.add_task("A".into(), None, None, None);
+        p.add_task("A".into(), None, None, None).unwrap();
         // Manually add a bad dependency
         p.tasks[0].depends_on.push(TaskId(99));
         assert!(validate_dag(&p.tasks).is_err());
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn validate_project_bad_concept_ref() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
         // Manually add bad concept reference
         p.get_task_mut(t1).unwrap().concepts.push(ConceptId(99));
         assert!(validate_project(&p).is_err());
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn validate_detects_duplicate_task_id() {
         let mut p = Project::new();
-        p.add_task("A".into(), None, None, None);
+        p.add_task("A".into(), None, None, None).unwrap();
         p.tasks.push(crate::model::task::Task {
             id: TaskId(1),
             name: "Dup".into(),
@@ -220,7 +220,7 @@ mod tests {
         let mut p = Project::new();
         p.add_concept("A".into(), None, None).unwrap();
         p.add_concept("B".into(), None, None).unwrap();
-        p.add_task("T".into(), None, None, None);
+        p.add_task("T".into(), None, None, None).unwrap();
         assert!(validate_unique_ids(&p).is_ok());
     }
 
@@ -255,11 +255,16 @@ mod tests {
             .unwrap();
 
         // Build tasks
-        p.add_task("Design API".into(), None, Some(2.0), None);
-        p.add_task("Implement API".into(), None, Some(5.0), None);
-        p.add_task("Design DB".into(), None, Some(1.0), None);
-        p.add_task("Implement DB".into(), None, Some(3.0), None);
-        p.add_task("Frontend prototype".into(), None, Some(4.0), None);
+        p.add_task("Design API".into(), None, Some(2.0), None)
+            .unwrap();
+        p.add_task("Implement API".into(), None, Some(5.0), None)
+            .unwrap();
+        p.add_task("Design DB".into(), None, Some(1.0), None)
+            .unwrap();
+        p.add_task("Implement DB".into(), None, Some(3.0), None)
+            .unwrap();
+        p.add_task("Frontend prototype".into(), None, Some(4.0), None)
+            .unwrap();
 
         // Dependencies
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();

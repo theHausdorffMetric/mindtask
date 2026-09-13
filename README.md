@@ -147,6 +147,8 @@ mindtask depend add <TASK_ID> <DEPENDS_ON_ID>
 mindtask depend rm <TASK_ID> <DEPENDS_ON_ID>
 ```
 
+Names are trimmed and must be non-empty with no control characters; `--duration` must be a finite number of days ≥ 0 (`0` marks a milestone). Invalid values are rejected before anything is written.
+
 Adding a dependency that would create a cycle is rejected. Removing a task automatically cleans up references from other tasks' dependency lists.
 
 ### Linking Tasks to Concepts
@@ -315,7 +317,7 @@ to a truncating write. Replacing a file preserves its permission bits.
 
 mindtask is also usable as a Rust library (`use mindtask::...`):
 
-- `mindtask::model` — `Project`, `Concept`, `Task`, typed IDs (`ConceptId`, `TaskId`)
+- `mindtask::model` — `Project`, `Concept`, `Task`, typed IDs (`ConceptId`, `TaskId`), input validation (`validate_name`, `validate_duration`)
 - `mindtask::graph` — Tree validation, DAG cycle detection, topological sort, project validation
 - `mindtask::store` — JSON persistence (load/save)
 - `mindtask::export` — Diagram generation (PlantUML; Mermaid returns an error)

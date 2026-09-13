@@ -414,3 +414,128 @@ fn mermaid_export_fails_instead_of_emitting_a_placeholder() {
     let ok = run(dir.path(), &["export", "plantuml", "tree"]);
     assert!(ok.status.success());
 }
+
+// --- Review phase 2: input validation --------------------------------------
+
+const ONE_CONCEPT: &str = r#"{
+  "version": 1,
+  "concepts": [{ "id": 1, "name": "Root" }],
+  "tasks": []
+}"#;
+
+fn project_file(dir: &Path) -> String {
+    std::fs::read_to_string(dir.join(".mindtask.json")).unwrap()
+}
+
+#[test]
+fn non_finite_and_negative_durations_are_rejected_at_the_flag() {
+    // C10/C11: `nan`/`inf` serialised to `null` and vanished on reload;
+    // `-5` produced a schedule that finished before it started.
+    let dir = project_dir(ONE_CONCEPT);
+    for bad in ["nan", "inf", "-inf", "-5", "abc"] {
+        let out = run(
+            dir.path(),
+            &["task", "add", "T", &format!("--duration={bad}")],
+        );
+        assert!(!out.status.success(), "--duration={bad} was accepted");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("--duration"),
+            "--duration={bad}: error does not name the flag: {stderr}"
+        );
+    }
+    assert!(
+        !project_file(dir.path()).contains("\"T\""),
+        "a rejected task was written to the project file"
+    );
+
+    // The same parser guards `task edit`.
+    assert!(
+        run(dir.path(), &["task", "add", "T", "--duration", "2"])
+            .status
+            .success()
+    );
+    let out = run(dir.path(), &["task", "edit", "1", "--duration=-1"]);
+    assert!(!out.status.success());
+    assert!(project_file(dir.path()).contains("\"duration\": 2.0"));
+
+    // Ordinary values, including zero-day milestones, still pass.
+    assert!(
+        run(dir.path(), &["task", "edit", "1", "--duration", "0"])
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn empty_and_control_character_names_are_rejected() {
+    // C14: `task add ""` produced a blank row and a newline broke every table.
+    let dir = project_dir(ONE_CONCEPT);
+    for (args, want) in [
+        (vec!["task", "add", ""], "must not be empty"),
+        (vec!["task", "add", "   "], "must not be empty"),
+        (vec!["concept", "add", "a\nb"], "control characters"),
+        (
+            vec!["concept", "edit", "1", "--name", "\t"],
+            "must not be empty",
+        ),
+        (vec!["task", "add", "ok"], ""),
+        (
+            vec!["task", "edit", "1", "--name", "x\ty"],
+            "control characters",
+        ),
+    ] {
+        let out = run(dir.path(), &args);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if want.is_empty() {
+            assert!(out.status.success(), "{args:?}: {stderr}");
+        } else {
+            assert!(!out.status.success(), "{args:?} was accepted");
+            assert!(stderr.contains(want), "{args:?}: stderr: {stderr}");
+        }
+    }
+    let file = project_file(dir.path());
+    assert!(
+        file.contains("\"name\": \"Root\""),
+        "concept was renamed: {file}"
+    );
+    assert!(
+        file.contains("\"name\": \"ok\""),
+        "task was renamed: {file}"
+    );
+    assert_eq!(file.matches("\"name\"").count(), 2, "{file}");
+}
+
+#[test]
+fn names_are_stored_trimmed() {
+    let dir = project_dir(ONE_CONCEPT);
+    assert!(
+        run(dir.path(), &["task", "add", "  padded  "])
+            .status
+            .success()
+    );
+    assert!(project_file(dir.path()).contains("\"name\": \"padded\""));
+}
+
+#[test]
+fn concept_rm_error_lists_referencing_tasks_plainly() {
+    // I4: the message used Debug formatting: `[TaskId(1), TaskId(2)]`.
+    let dir = project_dir(
+        r#"{
+          "version": 1,
+          "concepts": [{ "id": 1, "name": "C" }],
+          "tasks": [
+            { "id": 1, "name": "A", "concepts": [1] },
+            { "id": 2, "name": "B", "concepts": [1] }
+          ]
+        }"#,
+    );
+    let out = run(dir.path(), &["concept", "rm", "1"]);
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("tasks reference it: 1, 2"),
+        "stderr: {stderr}"
+    );
+    assert!(!stderr.contains("TaskId("), "stderr: {stderr}");
+}

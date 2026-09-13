@@ -34,7 +34,7 @@ use std::io::BufRead;
 use serde::Deserialize;
 
 use crate::model::id::ConceptId;
-use crate::model::project::Project;
+use crate::model::project::{Project, ProjectError};
 
 /// Errors from parsing or applying an import.
 #[derive(Debug, thiserror::Error)]
@@ -48,6 +48,10 @@ pub enum ImportError {
     /// The target concept does not exist.
     #[error("target concept {0} not found")]
     TargetNotFound(ConceptId),
+    /// A planned concept was refused by the project (e.g. an empty or
+    /// control-character node name).
+    #[error("cannot add concept {0:?}: {1}")]
+    Concept(String, ProjectError),
 }
 
 /// One line of the JSONL stream. Unknown `type` values are skipped by the
@@ -365,7 +369,7 @@ pub fn apply(
                 };
                 let id = project
                     .add_concept(pc.name.clone(), Some(parent_id), description)
-                    .expect("parent id verified above");
+                    .map_err(|e| ImportError::Concept(pc.name.clone(), e))?;
                 by_name.insert(pc.name.clone(), id);
                 report.added.push(pc.name.clone());
             }
@@ -557,5 +561,26 @@ mod tests {
             apply(&mut proj, ConceptId(9), &plan, false),
             Err(ImportError::TargetNotFound(_))
         ));
+    }
+
+    #[test]
+    fn apply_reports_a_refused_node_name_instead_of_panicking() {
+        // `add_concept` validates names since 0.11.0; an empty node id in the
+        // stream must surface as an error naming the node, not an `expect`.
+        let (mut proj, root) = project_with_target();
+        let g = parse(
+            r#"
+{"type":"node","id":"","docs":3,"category":"finance"}
+{"type":"node","id":"Parent","docs":9,"category":"finance"}
+{"type":"edge","kind":"typed","from":"","to":"Parent","rel":"is-a","weight":2}
+"#,
+        );
+        let plan = project_tree(&g, 1);
+        assert!(plan.concepts.iter().any(|c| c.name.is_empty()), "{plan:?}");
+        let err = apply(&mut proj, root, &plan, false).unwrap_err();
+        assert!(
+            matches!(&err, ImportError::Concept(name, ProjectError::EmptyName) if name.is_empty()),
+            "{err}"
+        );
     }
 }

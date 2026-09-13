@@ -178,7 +178,7 @@ mod tests {
         let mut p = Project::new();
         p.add_concept("Backend".into(), None, None).unwrap();
         p.add_concept("Frontend".into(), None, None).unwrap();
-        p.add_task("Build API".into(), None, None, None);
+        p.add_task("Build API".into(), None, None, None).unwrap();
         p.link_concept(TaskId(1), ConceptId(1)).unwrap();
         p
     }

@@ -255,7 +255,7 @@ enum TaskCommand {
         #[arg(long)]
         description: Option<String>,
         /// Duration in days
-        #[arg(long)]
+        #[arg(long, value_parser = task::parse_duration)]
         duration: Option<f64>,
         /// Due date (e.g. 2025-03-15T14:00, 2025-03-15T14:00[America/New_York])
         #[arg(long)]
@@ -278,7 +278,7 @@ enum TaskCommand {
         #[arg(long)]
         clear_description: bool,
         /// New duration in days
-        #[arg(long)]
+        #[arg(long, value_parser = task::parse_duration)]
         duration: Option<f64>,
         /// Clear the duration
         #[arg(long)]

@@ -10,7 +10,7 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.10.1"
+  documents-version: "0.11.0"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
@@ -21,6 +21,11 @@ Writes are atomic (temp file → fsync → rename), so an interrupted save leave
 the previous file intact. One consequence: saving needs write permission on the
 *directory*, not just the file, so a command that modifies the project fails in
 a read-only directory instead of silently succeeding.
+
+Inputs are validated at the boundary: names are trimmed and must be non-empty
+with no control characters (tab, newline); `--duration` must be a finite number
+of days ≥ 0 (`0` is a milestone). Rejected values exit non-zero and leave the
+file untouched.
 
 ## Command reference
 

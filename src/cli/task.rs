@@ -3,11 +3,19 @@ use anyhow::{Context, Result};
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
 use mindtask::model::task::{Task, TaskState, parse_due};
+use mindtask::model::validate::validate_duration;
 
 use super::render::{
     DESC_INDENT, DescMode, desc_block, render_table_with_blocks, resolve_wrap_width, wrap_block,
 };
 use super::state_filter::{StateFilter, hidden_footer};
+
+/// clap `value_parser` for `--duration`: the model rule, applied at the parse
+/// boundary so the error names the flag.
+pub(super) fn parse_duration(s: &str) -> std::result::Result<f64, String> {
+    let days: f64 = s.parse().map_err(|_| format!("'{s}' is not a number"))?;
+    validate_duration(days).map_err(|e| e.to_string())
+}
 
 /// Format a Zoned datetime for display, converting to the project timezone.
 fn format_due(due: &jiff::Zoned, project: &Project) -> String {
@@ -98,7 +106,9 @@ pub fn add(
         }
     }
 
-    let id = project.add_task(name.clone(), description, duration, due);
+    let id = project
+        .add_task(name, description, duration, due)
+        .context("failed to add task")?;
     for cid in &concepts {
         // Concepts validated above; link_concept is idempotent and re-checks.
         project
@@ -106,8 +116,10 @@ pub fn add(
             .context("failed to link concept")?;
     }
 
+    // Echo the stored name: the model trims it.
+    let name = &project.get_task(id).expect("task was just added").name;
     if concepts.is_empty() {
-        println!("Added task {} \"{}\"", id, name);
+        println!("Added task {id} \"{name}\"");
     } else {
         let linked = concepts
             .iter()

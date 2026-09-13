@@ -6,6 +6,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-13
+
+Input-validation release, closing phase 2 of the 0.9.0 architecture review.
+`Project::add_task` now returns `Result` and `ProjectError` gained three
+variants, so this is a minor bump; the CLI surface is unchanged apart from
+rejecting values it previously accepted.
+
+### Fixed
+- **`--duration` rejects `nan`, `inf`, and negative values** (C10, C11).
+  Non-finite durations serialised to JSON `null` and silently vanished on
+  reload; negative ones produced a schedule in which a task finished before it
+  started. clap now refuses them at the flag (`invalid value 'nan' for
+  '--duration <DURATION>': …`), and `Project::add_task`/`edit_task` enforce
+  the same rule for library callers. Zero (a milestone) remains valid; `-0` is
+  stored as `0`.
+- **Empty and control-character names are rejected** (C14). `task add ""`
+  produced a blank row, and an embedded newline or tab misaligned every listing
+  and split diagram declarations. Names are trimmed of surrounding whitespace,
+  then must be non-empty and free of control characters — enforced in
+  `add_concept`, `add_task`, `edit_concept`, and `edit_task`, so `import` is
+  covered too. Existing files are not re-validated on load.
+- **`concept rm` lists referencing tasks plainly** (I4): `tasks reference it:
+  1, 2` instead of `[TaskId(1), TaskId(2)]`.
+- `import` reports a node the project refuses (`cannot add concept "": name
+  must not be empty`) instead of panicking.
+- `task add` and `concept add` echo the stored (trimmed) name.
+
+### Changed
+- Library: `Project::add_task` returns `Result<TaskId>`; new
+  `ProjectError::{EmptyName, ControlCharInName, InvalidDuration}` and
+  `ImportError::Concept`; new `mindtask::model::validate` module exposing
+  `validate_name` and `validate_duration`.
+
 ## [0.10.1] - 2026-09-13
 
 Metadata-only release: no code changes.
@@ -24,8 +57,8 @@ Metadata-only release: no code changes.
 
 ## [0.10.0] - 2026-09-01
 
-Data-safety and output-correctness release, closing the first two phases of the
-0.9.0 architecture review. Two small library API changes make this a minor
+Data-safety and output-correctness release, closing C2 (atomic saves) and
+phase 1 of the 0.9.0 architecture review. Two small library API changes make this a minor
 rather than a patch bump; the CLI surface is unchanged.
 
 ### Fixed
@@ -293,7 +326,8 @@ rather than a patch bump; the CLI surface is unchanged.
   dependency graph: concept and task management, task dependencies, `search`,
   due dates with per-project timezone support, and JSON file storage.
 
-[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.10.0
 [0.9.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.9.0

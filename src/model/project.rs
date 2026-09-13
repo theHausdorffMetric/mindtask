@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::concept::Concept;
 use super::id::{ConceptId, TaskId};
 use super::task::{Task, TaskState};
+use super::validate::{validate_duration, validate_name};
 use jiff::Zoned;
 
 /// Errors from project mutation operations.
@@ -23,7 +24,7 @@ pub enum ProjectError {
     #[error("cannot remove concept {0}: it has child concepts")]
     ConceptHasChildren(ConceptId),
     /// Attempted to remove a concept that is still referenced by tasks.
-    #[error("cannot remove concept {0}: tasks reference it: {1:?}")]
+    #[error("cannot remove concept {0}: tasks reference it: {ids}", ids = join_ids(.1))]
     ConceptReferencedByTasks(ConceptId, Vec<TaskId>),
     /// Moving a concept would create a cycle in the tree.
     #[error("cannot move concept {id} under {new_parent}: would create a cycle")]
@@ -60,6 +61,23 @@ pub enum ProjectError {
     /// Attempted to position a concept relative to itself.
     #[error("cannot position concept {0} relative to itself")]
     SelfPlacement(ConceptId),
+    /// A name was empty or whitespace-only.
+    #[error("name must not be empty")]
+    EmptyName,
+    /// A name contained a control character (tab, newline, ...).
+    #[error("name must not contain control characters (found {0:?})")]
+    ControlCharInName(char),
+    /// A duration was not a finite, non-negative number of days.
+    #[error("duration must be a finite, non-negative number of days (got {0})")]
+    InvalidDuration(f64),
+}
+
+/// Render task IDs for an error message: `1, 2, 3`.
+fn join_ids(ids: &[TaskId]) -> String {
+    ids.iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Where to place a concept among its target parent's children when moving it.
@@ -276,7 +294,8 @@ impl Project {
         self.recompute_next_ids();
     }
 
-    /// Add a new concept. Returns `Err` if the parent ID doesn't exist.
+    /// Add a new concept. Returns `Err` if the parent ID doesn't exist or the
+    /// name fails [`validate_name`].
     pub fn add_concept(
         &mut self,
         name: String,
@@ -288,6 +307,7 @@ impl Project {
         {
             return Err(ProjectError::ConceptNotFound(pid));
         }
+        let name = validate_name(&name)?;
         let id = self.allocate_concept_id();
         self.concepts.push(Concept {
             id,
@@ -326,7 +346,8 @@ impl Project {
         Ok(())
     }
 
-    /// Edit a concept's name and/or description.
+    /// Edit a concept's name and/or description. A new name must pass
+    /// [`validate_name`].
     pub fn edit_concept(
         &mut self,
         id: ConceptId,
@@ -339,7 +360,7 @@ impl Project {
             .find(|c| c.id == id)
             .ok_or(ProjectError::ConceptNotFound(id))?;
         if let Some(n) = name {
-            concept.name = n;
+            concept.name = validate_name(&n)?;
         }
         if let Some(d) = description {
             concept.description = d;
@@ -433,7 +454,8 @@ impl Project {
         self.tasks.iter_mut().find(|t| t.id == id)
     }
 
-    /// Edit a task's name, description, and/or duration.
+    /// Edit a task's name, description, and/or duration. A new name must pass
+    /// [`validate_name`] and a new duration [`validate_duration`].
     pub fn edit_task(
         &mut self,
         id: TaskId,
@@ -447,25 +469,29 @@ impl Project {
             .find(|t| t.id == id)
             .ok_or(ProjectError::TaskNotFound(id))?;
         if let Some(n) = name {
-            task.name = n;
+            task.name = validate_name(&n)?;
         }
         if let Some(d) = description {
             task.description = d;
         }
         if let Some(d) = duration {
-            task.duration = d;
+            task.duration = d.map(validate_duration).transpose()?;
         }
         Ok(())
     }
 
     /// Add a new task with state `Todo` and no dependencies or concepts.
+    /// Returns `Err` if the name fails [`validate_name`] or the duration
+    /// [`validate_duration`].
     pub fn add_task(
         &mut self,
         name: String,
         description: Option<String>,
         duration: Option<f64>,
         due: Option<Zoned>,
-    ) -> TaskId {
+    ) -> Result<TaskId> {
+        let name = validate_name(&name)?;
+        let duration = duration.map(validate_duration).transpose()?;
         let id = self.allocate_task_id();
         self.tasks.push(Task {
             id,
@@ -477,7 +503,7 @@ impl Project {
             depends_on: Vec::new(),
             concepts: Vec::new(),
         });
-        id
+        Ok(id)
     }
 
     /// Remove a task and clean up any references to it in other tasks' dependency lists.
@@ -620,7 +646,8 @@ mod tests {
         p.add_concept("Root".into(), None, None).unwrap();
         p.add_concept("Child".into(), Some(ConceptId(1)), Some("desc".into()))
             .unwrap();
-        p.add_task("Do thing".into(), None, Some(1.5), None);
+        p.add_task("Do thing".into(), None, Some(1.5), None)
+            .unwrap();
 
         let json = serde_json::to_string_pretty(&p).unwrap();
         let mut parsed: Project = serde_json::from_str(&json).unwrap();
@@ -658,7 +685,7 @@ mod tests {
     fn remove_concept_referenced_by_task_fails() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        let tid = p.add_task("Work".into(), None, None, None);
+        let tid = p.add_task("Work".into(), None, None, None).unwrap();
         p.link_concept(tid, ConceptId(1)).unwrap();
         let err = p.remove_concept(ConceptId(1)).unwrap_err();
         assert!(matches!(err, ProjectError::ConceptReferencedByTasks(_, _)));
@@ -799,7 +826,7 @@ mod tests {
         p.concepts.push(c(7, Some(5)));
         p.concepts.push(c(9, Some(2)));
         p.recompute_next_ids();
-        let t = p.add_task("t".into(), None, None, None);
+        let t = p.add_task("t".into(), None, None, None).unwrap();
         p.get_task_mut(t).unwrap().concepts = vec![ConceptId(9), ConceptId(5)];
         p
     }
@@ -882,7 +909,7 @@ mod tests {
     #[test]
     fn normalize_leaves_task_dependencies_untouched() {
         let mut p = scrambled_project();
-        let t2 = p.add_task("t2".into(), None, None, None);
+        let t2 = p.add_task("t2".into(), None, None, None).unwrap();
         let t1 = p.tasks[0].id;
         p.get_task_mut(t2).unwrap().depends_on = vec![t1];
         let deps_before: Vec<_> = p.tasks.iter().map(|t| t.depends_on.clone()).collect();
@@ -979,7 +1006,7 @@ mod tests {
     #[test]
     fn add_and_remove_task() {
         let mut p = Project::new();
-        let id = p.add_task("Test".into(), None, None, None);
+        let id = p.add_task("Test".into(), None, None, None).unwrap();
         assert_eq!(id, TaskId(1));
         assert_eq!(p.tasks.len(), 1);
         p.remove_task(id).unwrap();
@@ -989,8 +1016,8 @@ mod tests {
     #[test]
     fn remove_task_cleans_up_deps() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None, None);
-        let t2 = p.add_task("B".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
+        let t2 = p.add_task("B".into(), None, None, None).unwrap();
         p.add_dependency(t2, t1).unwrap();
         assert_eq!(p.get_task(t2).unwrap().depends_on.len(), 1);
         p.remove_task(t1).unwrap();
@@ -1000,7 +1027,7 @@ mod tests {
     #[test]
     fn self_dependency_fails() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
         let err = p.add_dependency(t1, t1).unwrap_err();
         assert!(matches!(err, ProjectError::SelfDependency(_)));
     }
@@ -1008,8 +1035,8 @@ mod tests {
     #[test]
     fn remove_dependency_missing_edge_fails() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None, None);
-        let t2 = p.add_task("B".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
+        let t2 = p.add_task("B".into(), None, None, None).unwrap();
         // No edge between them yet.
         let err = p.remove_dependency(t2, t1).unwrap_err();
         assert!(matches!(err, ProjectError::DependencyNotFound(_, _)));
@@ -1025,8 +1052,8 @@ mod tests {
     #[test]
     fn remove_dependency_succeeds() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None, None);
-        let t2 = p.add_task("B".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
+        let t2 = p.add_task("B".into(), None, None, None).unwrap();
         p.add_dependency(t2, t1).unwrap();
         p.remove_dependency(t2, t1).unwrap();
         assert!(p.get_task(t2).unwrap().depends_on.is_empty());
@@ -1035,8 +1062,8 @@ mod tests {
     #[test]
     fn duplicate_dependency_fails() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None, None);
-        let t2 = p.add_task("B".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
+        let t2 = p.add_task("B".into(), None, None, None).unwrap();
         p.add_dependency(t2, t1).unwrap();
         let err = p.add_dependency(t2, t1).unwrap_err();
         assert!(matches!(err, ProjectError::DuplicateDependency(_, _)));
@@ -1045,9 +1072,9 @@ mod tests {
     #[test]
     fn cycle_detection() {
         let mut p = Project::new();
-        let t1 = p.add_task("A".into(), None, None, None);
-        let t2 = p.add_task("B".into(), None, None, None);
-        let t3 = p.add_task("C".into(), None, None, None);
+        let t1 = p.add_task("A".into(), None, None, None).unwrap();
+        let t2 = p.add_task("B".into(), None, None, None).unwrap();
+        let t3 = p.add_task("C".into(), None, None, None).unwrap();
         p.add_dependency(t2, t1).unwrap(); // B depends on A
         p.add_dependency(t3, t2).unwrap(); // C depends on B
         let err = p.add_dependency(t1, t3).unwrap_err(); // A depends on C -> cycle!
@@ -1060,7 +1087,7 @@ mod tests {
     fn link_unlink_concept() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        let t1 = p.add_task("Work".into(), None, None, None);
+        let t1 = p.add_task("Work".into(), None, None, None).unwrap();
         p.link_concept(t1, ConceptId(1)).unwrap();
         assert_eq!(p.get_task(t1).unwrap().concepts.len(), 1);
         // Idempotent
@@ -1075,7 +1102,7 @@ mod tests {
     fn unlink_concept_not_linked_fails() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        let t1 = p.add_task("Work".into(), None, None, None);
+        let t1 = p.add_task("Work".into(), None, None, None).unwrap();
         // Never linked: unlinking should error rather than silently succeed.
         let err = p.unlink_concept(t1, ConceptId(1)).unwrap_err();
         assert!(matches!(err, ProjectError::ConceptNotLinked(_, _)));
@@ -1120,7 +1147,7 @@ mod tests {
     #[test]
     fn edit_task_name_and_description() {
         let mut p = Project::new();
-        let id = p.add_task("Old".into(), None, Some(1.0), None);
+        let id = p.add_task("Old".into(), None, Some(1.0), None).unwrap();
         p.edit_task(id, Some("New".into()), Some(Some("desc".into())), None)
             .unwrap();
         let t = p.get_task(id).unwrap();
@@ -1132,7 +1159,9 @@ mod tests {
     #[test]
     fn edit_task_clear_description_and_duration() {
         let mut p = Project::new();
-        let id = p.add_task("T".into(), Some("desc".into()), Some(2.0), None);
+        let id = p
+            .add_task("T".into(), Some("desc".into()), Some(2.0), None)
+            .unwrap();
         p.edit_task(id, None, Some(None), Some(None)).unwrap();
         let t = p.get_task(id).unwrap();
         assert!(t.description.is_none());
@@ -1151,11 +1180,94 @@ mod tests {
     #[test]
     fn set_task_state() {
         let mut p = Project::new();
-        let t1 = p.add_task("Work".into(), None, None, None);
+        let t1 = p.add_task("Work".into(), None, None, None).unwrap();
         assert_eq!(p.get_task(t1).unwrap().state, TaskState::Todo);
         p.set_task_state(t1, TaskState::InProgress).unwrap();
         assert_eq!(p.get_task(t1).unwrap().state, TaskState::InProgress);
         p.set_task_state(t1, TaskState::Done).unwrap();
         assert_eq!(p.get_task(t1).unwrap().state, TaskState::Done);
+    }
+
+    #[test]
+    fn add_task_rejects_non_finite_and_negative_durations() {
+        let mut p = Project::new();
+        for bad in [f64::NAN, f64::INFINITY, -1.0] {
+            let err = p.add_task("T".into(), None, Some(bad), None).unwrap_err();
+            assert!(
+                matches!(err, ProjectError::InvalidDuration(_)),
+                "{bad}: {err}"
+            );
+        }
+        assert!(p.tasks.is_empty(), "a rejected add must not allocate");
+        assert_eq!(p.next_task_id, 1);
+    }
+
+    #[test]
+    fn edit_task_rejects_bad_duration_and_keeps_the_old_one() {
+        let mut p = Project::new();
+        let id = p.add_task("T".into(), None, Some(2.0), None).unwrap();
+        let err = p
+            .edit_task(id, None, None, Some(Some(f64::NAN)))
+            .unwrap_err();
+        assert!(matches!(err, ProjectError::InvalidDuration(_)));
+        assert_eq!(p.get_task(id).unwrap().duration, Some(2.0));
+        // Clearing is still fine.
+        p.edit_task(id, None, None, Some(None)).unwrap();
+        assert_eq!(p.get_task(id).unwrap().duration, None);
+    }
+
+    #[test]
+    fn names_are_trimmed_on_add_and_edit() {
+        let mut p = Project::new();
+        let c = p.add_concept("  Root \n".into(), None, None).unwrap();
+        assert_eq!(p.get_concept(c).unwrap().name, "Root");
+        let t = p.add_task("\tWork  ".into(), None, None, None).unwrap();
+        assert_eq!(p.get_task(t).unwrap().name, "Work");
+        p.edit_task(t, Some(" Renamed ".into()), None, None)
+            .unwrap();
+        assert_eq!(p.get_task(t).unwrap().name, "Renamed");
+    }
+
+    #[test]
+    fn empty_and_control_character_names_are_rejected_everywhere() {
+        let mut p = Project::new();
+        let c = p.add_concept("Root".into(), None, None).unwrap();
+        let t = p.add_task("Work".into(), None, None, None).unwrap();
+
+        assert!(matches!(
+            p.add_concept("   ".into(), None, None).unwrap_err(),
+            ProjectError::EmptyName
+        ));
+        assert!(matches!(
+            p.add_task("a\nb".into(), None, None, None).unwrap_err(),
+            ProjectError::ControlCharInName('\n')
+        ));
+        assert!(matches!(
+            p.edit_concept(c, Some("".into()), None).unwrap_err(),
+            ProjectError::EmptyName
+        ));
+        assert!(matches!(
+            p.edit_task(t, Some("tab\there".into()), None, None)
+                .unwrap_err(),
+            ProjectError::ControlCharInName('\t')
+        ));
+        // Nothing was allocated or renamed by the rejected calls.
+        assert_eq!(p.concepts.len(), 1);
+        assert_eq!(p.tasks.len(), 1);
+        assert_eq!(p.get_concept(c).unwrap().name, "Root");
+        assert_eq!(p.get_task(t).unwrap().name, "Work");
+    }
+
+    #[test]
+    fn concept_referenced_error_lists_task_ids_plainly() {
+        // Review I4: the message used `{:?}` and read `[TaskId(1), TaskId(2)]`.
+        let mut p = Project::new();
+        let c = p.add_concept("C".into(), None, None).unwrap();
+        for name in ["A", "B"] {
+            let t = p.add_task(name.into(), None, None, None).unwrap();
+            p.link_concept(t, c).unwrap();
+        }
+        let msg = p.remove_concept(c).unwrap_err().to_string();
+        assert_eq!(msg, "cannot remove concept 1: tasks reference it: 1, 2");
     }
 }

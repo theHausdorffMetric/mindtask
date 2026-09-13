@@ -194,11 +194,16 @@ mod tests {
     fn worked_example_matches_hand_computation() {
         // A(2) E(4) independent; B(1)->C(3)->D(5); D also depends on A.
         let mut p = Project::new();
-        p.add_task("A Design API".into(), None, Some(2.0), None); // 1
-        p.add_task("B Design DB".into(), None, Some(1.0), None); // 2
-        p.add_task("C Implement DB".into(), None, Some(3.0), None); // 3
-        p.add_task("D Implement API".into(), None, Some(5.0), None); // 4
-        p.add_task("E Frontend".into(), None, Some(4.0), None); // 5
+        p.add_task("A Design API".into(), None, Some(2.0), None)
+            .unwrap(); // 1
+        p.add_task("B Design DB".into(), None, Some(1.0), None)
+            .unwrap(); // 2
+        p.add_task("C Implement DB".into(), None, Some(3.0), None)
+            .unwrap(); // 3
+        p.add_task("D Implement API".into(), None, Some(5.0), None)
+            .unwrap(); // 4
+        p.add_task("E Frontend".into(), None, Some(4.0), None)
+            .unwrap(); // 5
         p.add_dependency(TaskId(3), TaskId(2)).unwrap(); // C depends on B
         p.add_dependency(TaskId(4), TaskId(1)).unwrap(); // D depends on A
         p.add_dependency(TaskId(4), TaskId(3)).unwrap(); // D depends on C
@@ -224,7 +229,7 @@ mod tests {
     #[test]
     fn single_task_is_critical() {
         let mut p = Project::new();
-        p.add_task("only".into(), None, Some(3.0), None);
+        p.add_task("only".into(), None, Some(3.0), None).unwrap();
         let s = schedule(&p.tasks).unwrap();
         assert!(approx(s.duration, 3.0));
         assert_row(&s, 1, 0.0, 3.0, 0.0, 3.0, 0.0, true);
@@ -233,8 +238,8 @@ mod tests {
     #[test]
     fn no_duration_tasks_are_zero_day_milestones() {
         let mut p = Project::new();
-        p.add_task("milestone".into(), None, None, None); // 1, dur 0
-        p.add_task("work".into(), None, Some(2.0), None); // 2
+        p.add_task("milestone".into(), None, None, None).unwrap(); // 1, dur 0
+        p.add_task("work".into(), None, Some(2.0), None).unwrap(); // 2
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         let s = schedule(&p.tasks).unwrap();
         assert!(approx(s.duration, 2.0));
@@ -247,10 +252,10 @@ mod tests {
     fn diamond_dependencies() {
         // A(1) -> B(2), A -> C(4), B -> D(1), C -> D. Longest path A,C,D = 6.
         let mut p = Project::new();
-        p.add_task("A".into(), None, Some(1.0), None); // 1
-        p.add_task("B".into(), None, Some(2.0), None); // 2
-        p.add_task("C".into(), None, Some(4.0), None); // 3
-        p.add_task("D".into(), None, Some(1.0), None); // 4
+        p.add_task("A".into(), None, Some(1.0), None).unwrap(); // 1
+        p.add_task("B".into(), None, Some(2.0), None).unwrap(); // 2
+        p.add_task("C".into(), None, Some(4.0), None).unwrap(); // 3
+        p.add_task("D".into(), None, Some(1.0), None).unwrap(); // 4
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         p.add_dependency(TaskId(3), TaskId(1)).unwrap();
         p.add_dependency(TaskId(4), TaskId(2)).unwrap();

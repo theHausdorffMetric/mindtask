@@ -1,6 +1,6 @@
 # mindtask — Status
 
-## Current Phase: Scheduling (Phase 6) + graph import + description output (0.10.0)
+## Current Phase: Scheduling (Phase 6) + graph import + description output (0.11.0)
 
 **0.10.1 (2026-09-13): metadata-only** — the repository moved from sourcehut to
 GitHub (`https://github.com/theHausdorffMetric/mindtask`); `Cargo.toml`
@@ -11,8 +11,17 @@ diagram export, concept subtree reporting, and CPM scheduling (earliest/latest
 times, slack, critical path) surfaced by `mindtask schedule` and the
 schedule-driven Gantt.
 
-**0.10.0 (2026-09-01): data safety + output correctness** — closes phases 1-2
-of the 0.9.0 architecture review ([CODE_REVIEW-0.9.0.md](CODE_REVIEW-0.9.0.md)).
+**0.11.0 (2026-09-03): input validation** — closes phase 2 of the 0.9.0
+review. `--duration` refuses `nan`/`inf` (which serialised to `null` and
+vanished on reload) and negatives (which scheduled a task to finish before it
+started); names are trimmed and must be non-empty without control characters.
+Both rules live in the model (`model/validate.rs`), so library callers and
+`import` get them too, and the CLI reuses the duration rule as a clap
+`value_parser` so the error names the flag. `Project::add_task` now returns
+`Result`. Not yet published to crates.io.
+
+**0.10.0 (2026-09-01): data safety + output correctness** — closes C2 (atomic saves) and phase 1
+of the 5-phase plan in the 0.9.0 architecture review ([CODE_REVIEW-0.9.0.md](CODE_REVIEW-0.9.0.md)).
 Saves are atomic (temp file + fsync + rename), so an interrupt or full disk can
 no longer truncate the project file. The Gantt export identifies tasks by ID
 alias rather than by name, which previously made two same-named tasks emit a

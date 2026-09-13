@@ -402,9 +402,9 @@ mod tests {
         p.add_concept("Frontend".into(), None, None).unwrap();
 
         // Tasks: Design API (1), Build API (2), Build UI (3)
-        p.add_task("Design API".into(), None, None, None);
-        p.add_task("Build API".into(), None, None, None);
-        p.add_task("Build UI".into(), None, None, None);
+        p.add_task("Design API".into(), None, None, None).unwrap();
+        p.add_task("Build API".into(), None, None, None).unwrap();
+        p.add_task("Build UI".into(), None, None, None).unwrap();
 
         // Build API depends on Design API
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
@@ -495,9 +495,9 @@ mod tests {
     #[test]
     fn dag_colored_states() {
         let mut p = Project::new();
-        p.add_task("Done task".into(), None, None, None);
-        p.add_task("WIP task".into(), None, None, None);
-        p.add_task("Todo task".into(), None, None, None);
+        p.add_task("Done task".into(), None, None, None).unwrap();
+        p.add_task("WIP task".into(), None, None, None).unwrap();
+        p.add_task("Todo task".into(), None, None, None).unwrap();
         p.set_task_state(TaskId(1), TaskState::Done).unwrap();
         p.set_task_state(TaskId(2), TaskState::InProgress).unwrap();
         let output = dag(&p, None);
@@ -519,7 +519,8 @@ mod tests {
         let mut p = Project::new();
         p.timezone = Some("UTC".into());
         let due = crate::model::task::parse_due("2025-03-15", "UTC").unwrap();
-        p.add_task("Deploy".into(), None, Some(2.0), Some(due));
+        p.add_task("Deploy".into(), None, Some(2.0), Some(due))
+            .unwrap();
         let output = gantt(&p);
         assert!(output.starts_with("@startgantt\n"));
         assert!(output.ends_with("@endgantt\n"));
@@ -530,7 +531,8 @@ mod tests {
     fn gantt_default_duration() {
         let mut p = Project::new();
         let due = crate::model::task::parse_due("2025-03-15", "UTC").unwrap();
-        p.add_task("Quick task".into(), None, None, Some(due));
+        p.add_task("Quick task".into(), None, None, Some(due))
+            .unwrap();
         let output = gantt(&p);
         assert!(output.contains("and ends 2025-03-15"));
     }
@@ -538,7 +540,7 @@ mod tests {
     #[test]
     fn gantt_skips_tasks_without_due() {
         let mut p = Project::new();
-        p.add_task("No due".into(), None, None, None);
+        p.add_task("No due".into(), None, None, None).unwrap();
         let output = gantt(&p);
         assert!(!output.contains("No due"));
     }
@@ -547,7 +549,8 @@ mod tests {
     fn gantt_colored_states() {
         let mut p = Project::new();
         let due = crate::model::task::parse_due("2025-03-15", "UTC").unwrap();
-        p.add_task("Done".into(), None, None, Some(due.clone()));
+        p.add_task("Done".into(), None, None, Some(due.clone()))
+            .unwrap();
         p.set_task_state(TaskId(1), TaskState::Done).unwrap();
         let output = gantt(&p);
         assert!(output.contains("[Done] as [t1] starts"));
@@ -565,8 +568,8 @@ mod tests {
     fn gantt_scheduled_when_dependencies_exist() {
         // A(1) -> B(2): a single chain, so both are critical and relative.
         let mut p = Project::new();
-        p.add_task("A".into(), None, Some(1.0), None);
-        p.add_task("B".into(), None, Some(2.0), None);
+        p.add_task("A".into(), None, Some(1.0), None).unwrap();
+        p.add_task("B".into(), None, Some(2.0), None).unwrap();
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         let out = gantt(&p);
         assert!(out.contains("[A] as [t1] lasts 1 days"), "{out}");
@@ -580,9 +583,9 @@ mod tests {
     fn gantt_scheduled_colors_noncritical_by_state() {
         // A -> Long(5) is the critical path; A -> Short(1) has slack.
         let mut p = Project::new();
-        p.add_task("A".into(), None, Some(1.0), None); // 1
-        p.add_task("Long".into(), None, Some(5.0), None); // 2 (critical)
-        p.add_task("Short".into(), None, Some(1.0), None); // 3 (slack)
+        p.add_task("A".into(), None, Some(1.0), None).unwrap(); // 1
+        p.add_task("Long".into(), None, Some(5.0), None).unwrap(); // 2 (critical)
+        p.add_task("Short".into(), None, Some(1.0), None).unwrap(); // 3 (slack)
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         p.add_dependency(TaskId(3), TaskId(1)).unwrap();
         p.set_task_state(TaskId(3), TaskState::InProgress).unwrap();
@@ -598,8 +601,8 @@ mod tests {
         // schedule order declares later. PlantUML rejects forward references:
         // every `starts at` must come after the last `lasts` declaration.
         let mut p = Project::new();
-        p.add_task("Late".into(), None, Some(1.0), None); // 1
-        p.add_task("Early".into(), None, Some(2.0), None); // 2
+        p.add_task("Late".into(), None, Some(1.0), None).unwrap(); // 1
+        p.add_task("Early".into(), None, Some(2.0), None).unwrap(); // 2
         p.add_dependency(TaskId(1), TaskId(2)).unwrap();
         let out = gantt(&p);
         assert!(out.contains("[t1] starts at [t2]'s end"), "{out}");
@@ -633,8 +636,8 @@ mod tests {
     fn wbs_unlinked_tasks() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        p.add_task("Linked".into(), None, None, None);
-        p.add_task("Unlinked".into(), None, None, None);
+        p.add_task("Linked".into(), None, None, None).unwrap();
+        p.add_task("Unlinked".into(), None, None, None).unwrap();
         p.link_concept(TaskId(1), ConceptId(1)).unwrap();
         let output = wbs(&p, None);
         assert!(output.contains("Unlinked"));
@@ -664,8 +667,8 @@ mod tests {
     fn wbs_subtree_omits_unlinked_group() {
         let mut p = Project::new();
         p.add_concept("Topic".into(), None, None).unwrap();
-        p.add_task("Linked".into(), None, None, None);
-        p.add_task("Floating".into(), None, None, None);
+        p.add_task("Linked".into(), None, None, None).unwrap();
+        p.add_task("Floating".into(), None, None, None).unwrap();
         p.link_concept(TaskId(1), ConceptId(1)).unwrap();
         let output = wbs(&p, Some(ConceptId(1)));
         assert!(output.contains("Linked"));
@@ -678,7 +681,7 @@ mod tests {
         let mut p = Project::new();
         p.add_concept("A".into(), None, None).unwrap();
         p.add_concept("B".into(), None, None).unwrap();
-        p.add_task("Shared".into(), None, None, None);
+        p.add_task("Shared".into(), None, None, None).unwrap();
         p.link_concept(TaskId(1), ConceptId(1)).unwrap();
         p.link_concept(TaskId(1), ConceptId(2)).unwrap();
         let output = wbs(&p, None);
@@ -710,7 +713,17 @@ mod tests {
         let root = p.add_concept("Root".into(), None, None).unwrap();
         for (i, name) in HOSTILE.iter().enumerate() {
             let due = crate::model::task::parse_due("2025-03-15", "UTC").unwrap();
-            let id = p.add_task((*name).to_string(), None, Some(i as f64 + 1.0), Some(due));
+            // `add_task` refuses these names since 0.11.0, but a hand-edited
+            // file can still carry them, so set them behind the boundary check.
+            let id = p
+                .add_task(
+                    format!("placeholder {i}"),
+                    None,
+                    Some(i as f64 + 1.0),
+                    Some(due),
+                )
+                .unwrap();
+            p.get_task_mut(id).unwrap().name = (*name).to_string();
             p.link_concept(id, root).unwrap();
         }
         p
@@ -778,7 +791,8 @@ mod tests {
     #[test]
     fn a_whitespace_only_name_still_gets_a_label() {
         let mut p = Project::new();
-        p.add_task("   ".into(), None, Some(1.0), None);
+        let id = p.add_task("x".into(), None, Some(1.0), None).unwrap();
+        p.get_task_mut(id).unwrap().name = "   ".into(); // bypasses validate_name
         let out = dag(&p, None);
         assert!(out.contains(UNNAMED), "{out}");
     }
@@ -788,8 +802,8 @@ mod tests {
         // The C9 regression: identifying tasks by name merged these two and
         // emitted `[X] starts at [X]'s end` — a dependency that never existed.
         let mut p = Project::new();
-        p.add_task("Same".into(), None, Some(1.0), None); // 1
-        p.add_task("Same".into(), None, Some(1.0), None); // 2
+        p.add_task("Same".into(), None, Some(1.0), None).unwrap(); // 1
+        p.add_task("Same".into(), None, Some(1.0), None).unwrap(); // 2
         p.add_dependency(TaskId(2), TaskId(1)).unwrap();
         let out = gantt(&p);
 

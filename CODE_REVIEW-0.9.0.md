@@ -219,7 +219,7 @@ nowhere in the project. The `dag` export gets this right (`as t{id}`, name only
 as a label); the Gantt should use the same discipline. PlantUML Gantt supports
 aliases, so the fix is mechanical.
 
-### C10. Non-finite durations are accepted and silently lost — **medium**
+### C10. Non-finite durations are accepted and silently lost — **medium** — ✅ FIXED (phase 2)
 
 `--duration` is parsed as `f64`, which accepts `nan` and `inf`. `serde_json`
 serialises non-finite floats as `null`, and `Option<f64>` reads `null` back as
@@ -237,7 +237,7 @@ No task durations set — nothing to schedule.
 The value is accepted without complaint, written as JSON `null`, and gone after
 one round-trip. Silent data loss with a success message.
 
-### C11. Negative durations are accepted — **medium**
+### C11. Negative durations are accepted — **medium** — ✅ FIXED (phase 2)
 
 ```sh
 $ mindtask task add "neg" --duration=-5
@@ -249,7 +249,7 @@ ID  NAME  DUR  START  FINISH  SLACK
 A task that finishes five days before the project begins. CPM has no meaning
 for negative durations; they should be rejected at parse time alongside C10.
 
-### C14. Empty names and names containing newlines are accepted — **low**
+### C14. Empty names and names containing newlines are accepted — **low** — ✅ FIXED (phase 2)
 
 `mindtask task add ""` succeeds and produces a blank row; an embedded newline
 breaks table alignment and diagram output. A minimum validation (non-empty
@@ -326,7 +326,7 @@ This matters more now than at v0.2.1, because 0.9.0 put descriptions into every
 listing. `unicode-width` is the standard fix and the wrapping helpers are
 already centralised in `render.rs`, so it is a contained change.
 
-### I4. `Debug` formatting leaks into user-facing errors
+### I4. `Debug` formatting leaks into user-facing errors — ✅ FIXED (phase 2)
 
 `ProjectError::ConceptReferencedByTasks` formats its `Vec<TaskId>` with `{1:?}`:
 
@@ -402,7 +402,7 @@ diagram kinds render cleanly for a project of deliberately hostile names, and
 46-concept/135-task project — so the sanitising is provably a no-op on ordinary
 names. Six new regression tests.
 
-### Phase 2 — Input validation (fixes silent data loss)
+### Phase 2 — Input validation (fixes silent data loss) — ✅ DONE
 
 5. **C10/C11 — duration.** Reject non-finite and negative values at the CLI
    parse boundary with a clap `value_parser`, so the error names the flag.
@@ -413,7 +413,13 @@ names. Six new regression tests.
    `ConceptReferencedByTasks`. Audit the other `ProjectError` variants for the
    same.
 
-*Small, mechanical, each independently testable. Ships as 0.9.2.*
+*Done (0.11.0).* Both rules live in a new `model/validate.rs`; the CLI reuses
+`validate_duration` as the clap `value_parser`, so the two layers cannot drift.
+`add_task` returns `Result` — a minor bump rather than the patch pencilled in
+above. Control characters are rejected rather than stripped: silently altering
+input is the same class of surprise this phase removes. Existing files are not
+re-validated on load, so a project written before 0.11.0 keeps loading.
+17 new tests.
 
 ### Phase 3 — Structural hardening
 
