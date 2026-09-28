@@ -20,4 +20,5 @@ pub mod export;
 pub mod graph;
 pub mod import;
 pub mod model;
+pub mod refs;
 pub mod store;

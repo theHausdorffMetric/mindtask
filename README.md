@@ -62,7 +62,7 @@ Data is stored in `.mindtask.json` in the current directory — human-readable, 
 
 ```sh
 mindtask init [--timezone <IANA_TZ>]    # Create a new .mindtask.json
-mindtask validate                       # Check tree + DAG integrity
+mindtask validate                       # Check tree + DAG integrity, and that every relative ref's file exists
 mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
 mindtask config wrap-width [<COLS>]     # Get or set the description wrap width
@@ -160,10 +160,43 @@ mindtask unlink <TASK_ID> <CONCEPT_ID>
 
 Links are many-to-many: a task can reference multiple concepts, and a concept can be referenced by multiple tasks. You can also link at creation time with `task add --concept <ID>` (repeatable), avoiding a separate `link` step.
 
+### References (refs)
+
+A ref is a citation from a task or concept to a page elsewhere — the bridge
+from a work item to the knowledge it is grounded in, such as a page in a
+Markdown knowledge bundle sitting beside the project file, or a URL.
+
+```sh
+mindtask ref add (--task <ID> | --concept <ID>) <URI>   # Attach a citation
+mindtask ref rm  (--task <ID> | --concept <ID>) <URI>   # Detach it (exact string)
+mindtask ref ls [--broken]                              # Every ref with its status: ok, missing, external
+mindtask ref mv <OLD> <NEW> [--dry-run]                 # Rewrite every ref whose path is OLD (fragments kept)
+mindtask task add <NAME> --ref <URI> ...                # Attach at creation (repeatable); same for concept add
+```
+
+A ref is a URI reference (RFC 3986) stored verbatim. Two kinds, told apart by
+the presence of a scheme:
+
+| Kind | Example | Checked how |
+| --- | --- | --- |
+| Relative | `knowledge/llm-wiki.md`, `RND/log.md#2026-08-01`, `RND/` | Resolved against the **project file's directory** (never the working directory, so `-f` from elsewhere behaves the same); `validate` fails when the file is missing. A `#fragment` is kept but not checked; a directory counts as existing. |
+| Absolute | `https://…`, `mailto:…` | Syntax only — never fetched. `ref ls` shows it as `external`. |
+
+Rejected at the door: an empty value, any whitespace or control character, a
+filesystem-absolute path (`/home/…`, `C:\…` — it would not survive a clone), and
+a bare `#fragment`. The same string twice on one owner is a duplicate. Refs keep
+insertion order.
+
+`task show` and `concept show` print a `Refs:` block, one ref per line;
+`search` matches refs and prints the hit beneath the row. A broken ref never
+blocks an operational command — only `validate` and `ref ls` look at the
+filesystem — so a renamed page cannot lock you out of your own tracker; it
+fails `validate` until `ref mv` (or `ref rm`) repairs the citations.
+
 ### Search
 
 ```sh
-mindtask search <QUERY>                  # Search by name (case-insensitive)
+mindtask search <QUERY>                  # Search by name and ref (case-insensitive)
 mindtask search <QUERY> -d|--description  # Also search descriptions, and show the matching excerpt
 ```
 
@@ -269,12 +302,12 @@ generated chart.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "timezone": "America/New_York",
   "wrap_width": 80,
   "concepts": [
     { "id": 1, "name": "Backend" },
-    { "id": 2, "name": "API", "parent": 1 },
+    { "id": 2, "name": "API", "parent": 1, "refs": ["docs/api-design.md"] },
     { "id": 3, "name": "Database", "parent": 1 }
   ],
   "tasks": [
@@ -286,13 +319,23 @@ generated chart.
       "duration": 5.0,
       "due": "2025-03-15T00:00:00-04:00[America/New_York]",
       "depends_on": [1],
-      "concepts": [2]
+      "concepts": [2],
+      "refs": ["docs/api-design.md#auth", "https://example.org/rfc"]
     }
   ]
 }
 ```
 
-Optional fields (`description`, `duration`, `due`, `depends_on`, `concepts`, `parent`) are omitted from the JSON when empty or unset.
+Optional fields (`description`, `duration`, `due`, `depends_on`, `concepts`, `parent`, `refs`) are omitted from the JSON when empty or unset.
+
+`version` is the **file-format version**, currently `2` (0.12.0 added `refs`).
+A file declaring a newer version than the binary understands is refused with a
+message to upgrade, and so is a file carrying a field the binary does not know
+— in both cases rather than reading it and silently dropping data on the next
+save. A version-1 file loads unchanged and is marked `2` when next saved. Note
+that binaries **older than 0.12.0 do drop `refs`** on save, since they neither
+check the version nor refuse unknown fields; upgrade every machine that writes
+a shared project file before adding refs to it.
 
 The file is written **atomically**: new contents go to a temp file alongside it,
 are flushed to disk, and only then replace the target by rename, with the parent
@@ -312,14 +355,17 @@ to a truncating write. Replacing a file preserves its permission bits.
 | Storage | Single JSON file | Human-readable, versionable with git, no database needed. |
 | IDs | Auto-increment integers | Simple to type, context distinguishes concepts from tasks. |
 | Timezones | IANA via `jiff` | RFC 9557 format preserves timezone identity across serialization. |
+| Refs | Plain URI references, relative to the project file | Clickable anywhere a path is; no custom scheme to teach other tools. Existence is the only check — mindtask never parses the cited page. |
+| Format version | Newer files and unknown fields refused on load | A file from a newer mindtask is rejected loudly, not read with its additions silently dropped on save. |
 
 ## Library
 
 mindtask is also usable as a Rust library (`use mindtask::...`):
 
-- `mindtask::model` — `Project`, `Concept`, `Task`, typed IDs (`ConceptId`, `TaskId`), input validation (`validate_name`, `validate_duration`)
+- `mindtask::model` — `Project`, `Concept`, `Task`, typed IDs (`ConceptId`, `TaskId`), input validation (`validate_name`, `validate_duration`, `validate_ref`), ref classification (`reference::{RefOwner, RefKind, classify}`), `FORMAT_VERSION`
 - `mindtask::graph` — Tree validation, DAG cycle detection, topological sort, project validation
-- `mindtask::store` — JSON persistence (load/save)
+- `mindtask::refs` — Ref resolution against the project file's directory and the existence check (`base_dir`, `status`, `check`)
+- `mindtask::store` — JSON persistence (load/save; refuses newer format versions)
 - `mindtask::export` — Diagram generation (PlantUML; Mermaid returns an error)
 
 ## License

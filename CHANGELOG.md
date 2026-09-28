@@ -6,6 +6,60 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-28
+
+Refs: structured citations from tasks and concepts to pages elsewhere — the
+bridge from a work item to the knowledge it is grounded in (a page of a
+Markdown knowledge bundle beside the project file, or a URL) — and, with them,
+the first file-format version bump. New commands and library API, so a minor
+bump; nothing that 0.11.0 wrote is rejected.
+
+### Added
+- **`refs` on tasks and concepts.** A list of URI references stored verbatim.
+  A *relative* ref (`knowledge/llm-wiki.md#ingest`) names a file relative to
+  the project file's directory — never the working directory — and is checked
+  for existence; an *absolute* ref (`https://…`) is syntax-checked only and
+  never fetched. Rejected: empty, whitespace or control characters,
+  filesystem-absolute paths, a bare `#fragment`; duplicates per owner.
+- **`mindtask ref add|rm|ls|mv`** and `--ref <URI>` (repeatable) on
+  `task add` / `concept add`. `ref ls [--broken]` is the citation table
+  (`KIND ID NAME REF STATUS`, status `ok` / `missing` / `external`); `ref mv
+  <OLD> <NEW> [--dry-run]` rewrites every ref whose path part is `OLD`,
+  keeping fragments — the remedy for a renamed page.
+- **`validate` checks refs.** After the structural checks it lists every
+  relative ref whose file is missing and exits non-zero ("Structure is
+  valid." + the list + `Validation failed: N broken ref(s)`). Only `validate`
+  and `ref ls` touch the filesystem: a broken ref never blocks an operational
+  command, so a renamed page cannot lock you out of the tracker.
+- `task show` / `concept show` print a `Refs:` block, one per line; `search`
+  matches refs (in the default, name-only mode) and prints the hit beneath
+  the row.
+- Library: `model::reference` (`RefOwner`, `RefKind`, `classify`,
+  `path_part`), `model::validate::validate_ref`, `mindtask::refs`
+  (`base_dir`, `resolve`, `status`, `check`, `BrokenRef`),
+  `Project::{add_ref, remove_ref, rename_ref, refs}`,
+  `ProjectError::{InvalidRef, DuplicateRef, RefNotFound}`,
+  `project::FORMAT_VERSION`, `StoreError::UnsupportedVersion`.
+
+### Changed
+- **File-format version 2.** `version` was written as `1` and never read;
+  it now does its job. `Project::new` writes `2`; `load` refuses a file
+  declaring a *higher* version ("…newer than this mindtask supports; upgrade
+  mindtask"). A version-1 file loads unchanged and is marked `2` on its next
+  save.
+- **Unknown fields are refused on load** (`deny_unknown_fields` on
+  `Project`, `Task`, `Concept`). A file written by a newer mindtask fails to
+  parse instead of being read with its additions silently dropped on the next
+  save. The `status` alias for `state` is still accepted. Hand-added keys
+  break loading — the project file was never meant to be hand-edited.
+- **Compatibility hazard, one-time.** Binaries *older than 0.12.0* neither
+  check the version nor refuse unknown fields, so they load a file with refs
+  and drop the refs on their next save. Upgrade every machine that writes a
+  shared project file before the first `ref add`. The two measures above make
+  this the last format change with that property.
+- `search` help now reads "by name (and ref)"; `validate` help names the ref
+  check.
+
 ## [0.11.0] - 2026-09-13
 
 Input-validation release, closing phase 2 of the 0.9.0 architecture review.
@@ -326,7 +380,8 @@ rather than a patch bump; the CLI surface is unchanged.
   dependency graph: concept and task management, task dependencies, `search`,
   due dates with per-project timezone support, and JSON file storage.
 
-[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/theHausdorffMetric/mindtask/releases/tag/v0.10.0

@@ -2,6 +2,7 @@ mod concept;
 mod config;
 mod import;
 mod project;
+mod reference;
 mod render;
 mod schedule;
 mod search;
@@ -14,6 +15,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
 use mindtask::model::id::{ConceptId, TaskId};
+use mindtask::model::reference::RefOwner;
 use mindtask::model::task::TaskState;
 
 use render::DescMode;
@@ -71,7 +73,11 @@ enum Command {
         /// Concept ID (e.g. 1)
         concept_id: ConceptId,
     },
-    /// Search concepts and tasks by name
+    /// Manage refs: citations from tasks and concepts to pages (paths relative
+    /// to the project file, e.g. an OKF bundle page, or URLs)
+    #[command(subcommand)]
+    Ref(RefCommand),
+    /// Search concepts and tasks by name (and ref)
     Search {
         /// Search query (case-insensitive substring match)
         query: String,
@@ -117,7 +123,8 @@ enum Command {
         #[arg(long)]
         critical: bool,
     },
-    /// Validate the project file
+    /// Validate the project file: tree, DAG, cross-references, and that every
+    /// relative ref points at an existing file
     Validate,
     /// Import a typed concept-graph JSONL (e.g. pdfdex `graph --format jsonl`):
     /// project its is-a slice onto a strict tree under a target concept
@@ -155,6 +162,9 @@ enum ConceptCommand {
         /// Description
         #[arg(long)]
         description: Option<String>,
+        /// Ref to attach (repeatable, e.g. --ref knowledge/page.md)
+        #[arg(long = "ref", value_name = "URI")]
+        refs: Vec<String>,
     },
     /// Remove a concept
     Rm {
@@ -263,6 +273,9 @@ enum TaskCommand {
         /// Concept ID to link the task to (repeatable, e.g. --concept 1 --concept 2)
         #[arg(long = "concept")]
         concepts: Vec<ConceptId>,
+        /// Ref to attach (repeatable, e.g. --ref knowledge/page.md#section)
+        #[arg(long = "ref", value_name = "URI")]
+        refs: Vec<String>,
     },
     /// Edit a task's name, description, or duration
     Edit {
@@ -352,6 +365,63 @@ enum DependCommand {
         /// Dependency to remove (e.g. 1)
         depends_on: TaskId,
     },
+}
+
+#[derive(Subcommand)]
+enum RefCommand {
+    /// Attach a ref to a task or concept
+    #[command(group(clap::ArgGroup::new("owner").required(true).args(["task", "concept"])))]
+    Add {
+        /// URI reference: a path relative to the project file
+        /// (e.g. knowledge/page.md#section) or a URL
+        uri: String,
+        /// Task the ref belongs to (e.g. --task 8)
+        #[arg(long, value_name = "ID")]
+        task: Option<TaskId>,
+        /// Concept the ref belongs to (e.g. --concept 12)
+        #[arg(long, value_name = "ID")]
+        concept: Option<ConceptId>,
+    },
+    /// Detach a ref from a task or concept
+    #[command(group(clap::ArgGroup::new("owner").required(true).args(["task", "concept"])))]
+    Rm {
+        /// The ref, exactly as stored
+        uri: String,
+        /// Task the ref belongs to (e.g. --task 8)
+        #[arg(long, value_name = "ID")]
+        task: Option<TaskId>,
+        /// Concept the ref belongs to (e.g. --concept 12)
+        #[arg(long, value_name = "ID")]
+        concept: Option<ConceptId>,
+    },
+    /// List every ref with its status: ok, missing (relative, target absent),
+    /// or external (URL, not checked)
+    Ls {
+        /// Show only refs whose target is missing
+        #[arg(long)]
+        broken: bool,
+    },
+    /// Rewrite every ref whose path is OLD to NEW, keeping fragments — for
+    /// when a cited page was renamed
+    Mv {
+        /// Path part to replace (e.g. knowledge/old.md)
+        old: String,
+        /// Replacement (e.g. knowledge/new.md)
+        new: String,
+        /// Show what would change without saving
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+/// The owner a `ref add`/`ref rm` targets. clap guarantees exactly one of the
+/// two flags is present.
+fn ref_owner(task: Option<TaskId>, concept: Option<ConceptId>) -> RefOwner {
+    match (task, concept) {
+        (Some(id), _) => RefOwner::Task(id),
+        (None, Some(id)) => RefOwner::Concept(id),
+        (None, None) => unreachable!("clap requires --task or --concept"),
+    }
 }
 
 #[derive(Subcommand)]
@@ -455,7 +525,7 @@ pub fn run() -> Result<()> {
             // own diagnostic instead of being blocked by load_project's check.
             let proj = mindtask::store::json::load(&path)
                 .with_context(|| format!("failed to load project from {}", path.display()))?;
-            project::validate(&proj)
+            project::validate(&proj, mindtask::refs::base_dir(&path))
         }
         Command::Concept(cmd) => {
             let path = resolve_project_file(file)?;
@@ -465,7 +535,8 @@ pub fn run() -> Result<()> {
                     name,
                     parent,
                     description,
-                } => concept::add(&mut proj, name, parent, description)?,
+                    refs,
+                } => concept::add(&mut proj, name, parent, description, refs)?,
                 ConceptCommand::Rm { id } => concept::remove(&mut proj, id)?,
                 ConceptCommand::Edit {
                     id,
@@ -523,7 +594,8 @@ pub fn run() -> Result<()> {
                     duration,
                     due,
                     concepts,
-                } => task::add(&mut proj, name, description, duration, due, concepts)?,
+                    refs,
+                } => task::add(&mut proj, name, description, duration, due, concepts, refs)?,
                 TaskCommand::Edit {
                     id,
                     name,
@@ -590,6 +662,29 @@ pub fn run() -> Result<()> {
             let mut proj = load_project(&path)?;
             task::unlink(&mut proj, task_id, concept_id)?;
             save_project(&path, &proj)
+        }
+        Command::Ref(cmd) => {
+            let path = resolve_project_file(file)?;
+            let mut proj = load_project(&path)?;
+            let modified = match cmd {
+                RefCommand::Add { uri, task, concept } => {
+                    reference::add(&mut proj, ref_owner(task, concept), &uri)?
+                }
+                RefCommand::Rm { uri, task, concept } => {
+                    reference::rm(&mut proj, ref_owner(task, concept), &uri)?
+                }
+                RefCommand::Ls { broken } => {
+                    reference::ls(&proj, mindtask::refs::base_dir(&path), broken);
+                    false
+                }
+                RefCommand::Mv { old, new, dry_run } => {
+                    reference::mv(&mut proj, &old, &new, dry_run)?
+                }
+            };
+            if modified {
+                save_project(&path, &proj)?;
+            }
+            Ok(())
         }
         Command::Import {
             input,

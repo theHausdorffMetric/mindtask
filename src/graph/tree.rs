@@ -99,18 +99,21 @@ mod tests {
             name: "A".into(),
             description: None,
             parent: Some(ConceptId(2)),
+            refs: vec![],
         });
         p.concepts.push(crate::model::concept::Concept {
             id: ConceptId(2),
             name: "B".into(),
             description: None,
             parent: Some(ConceptId(1)),
+            refs: vec![],
         });
         p.concepts.push(crate::model::concept::Concept {
             id: ConceptId(3),
             name: "C".into(),
             description: None,
             parent: Some(ConceptId(1)),
+            refs: vec![],
         });
         // Searching for an ID that is never reached must terminate (not hang)
         // even though the walk from 3 enters the 1<->2 cycle.
@@ -126,6 +129,7 @@ mod tests {
             name: "Bad".into(),
             description: None,
             parent: Some(ConceptId(99)),
+            refs: vec![],
         });
         assert!(validate_tree(&p).is_err());
     }

@@ -8,7 +8,8 @@ use std::path::Path;
 
 use tempfile::NamedTempFile;
 
-use crate::model::project::Project;
+use crate::model::project::{FORMAT_VERSION, Project};
+use crate::refs::base_dir;
 
 /// Errors that can occur during project load or save.
 #[derive(Debug, thiserror::Error)]
@@ -27,35 +28,48 @@ pub enum StoreError {
     /// as "failed to read project file".
     #[error("failed to write project file: {0}")]
     WriteError(std::io::Error),
-    /// The file contents are not valid JSON or don't match the schema.
+    /// The file contents are not valid JSON or don't match the schema. This
+    /// includes a field this build does not know, which most likely means the
+    /// file was written by a newer mindtask.
     #[error("failed to parse project file: {0}")]
     ParseError(#[from] serde_json::Error),
+    /// The file declares a format version newer than this build understands.
+    #[error(
+        "project file is format version {found}, newer than this mindtask \
+         supports ({supported}); upgrade mindtask"
+    )]
+    UnsupportedVersion {
+        /// The version the file declares.
+        found: u32,
+        /// [`FORMAT_VERSION`] of this build.
+        supported: u32,
+    },
 }
 
 /// Convenience alias for store results.
 pub type Result<T> = std::result::Result<T, StoreError>;
 
 /// Load a project from a JSON file, recomputing ID counters.
+///
+/// A file whose `version` is newer than [`FORMAT_VERSION`] is refused: reading
+/// it would drop whatever the newer format added, silently, on the next save.
+/// An older file loads as-is and is marked with the current version, so the
+/// next save records that a current binary has written it.
 pub fn load(path: &Path) -> Result<Project> {
     if !path.exists() {
         return Err(StoreError::NotFound(path.display().to_string()));
     }
     let contents = std::fs::read_to_string(path)?;
     let mut project: Project = serde_json::from_str(&contents)?;
+    if project.version > FORMAT_VERSION {
+        return Err(StoreError::UnsupportedVersion {
+            found: project.version,
+            supported: FORMAT_VERSION,
+        });
+    }
+    project.version = FORMAT_VERSION;
     project.recompute_next_ids();
     Ok(project)
-}
-
-/// The directory a temp file for `path` must live in.
-///
-/// `rename` is only atomic within a single filesystem, so the temp file has to
-/// be a sibling of the target. A bare filename has an empty parent, which means
-/// the current directory.
-fn sibling_dir(path: &Path) -> &Path {
-    match path.parent() {
-        Some(p) if !p.as_os_str().is_empty() => p,
-        _ => Path::new("."),
-    }
 }
 
 /// Save a project to a JSON file (pretty-printed), atomically.
@@ -68,7 +82,9 @@ fn sibling_dir(path: &Path) -> &Path {
 pub fn save(path: &Path, project: &Project) -> Result<()> {
     let json = serde_json::to_string_pretty(project)?;
 
-    let dir = sibling_dir(path);
+    // The temp file must be a sibling of the target: `rename` is only atomic
+    // within a single filesystem.
+    let dir = base_dir(path);
     let mut tmp = NamedTempFile::new_in(dir).map_err(StoreError::WriteError)?;
     tmp.write_all(json.as_bytes())
         .map_err(StoreError::WriteError)?;
@@ -125,7 +141,7 @@ mod tests {
         save(file.path(), &project).unwrap();
         let loaded = load(file.path()).unwrap();
 
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, FORMAT_VERSION);
         assert_eq!(loaded.concepts.len(), 2);
         assert_eq!(loaded.tasks.len(), 1);
         assert_eq!(loaded.next_concept_id, 3);
@@ -139,14 +155,68 @@ mod tests {
     }
 
     #[test]
-    fn sibling_dir_handles_bare_and_nested_paths() {
-        // A bare filename must resolve to the current directory, not `/`.
-        assert_eq!(sibling_dir(Path::new("project.json")), Path::new("."));
-        assert_eq!(sibling_dir(Path::new("a/b/project.json")), Path::new("a/b"));
-        assert_eq!(
-            sibling_dir(Path::new("/tmp/project.json")),
-            Path::new("/tmp")
-        );
+    fn an_older_format_version_loads_and_is_marked_current() {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(
+            file.path(),
+            r#"{"version":1,"concepts":[{"id":1,"name":"A"}],"tasks":[]}"#,
+        )
+        .unwrap();
+        let loaded = load(file.path()).unwrap();
+        assert_eq!(loaded.version, FORMAT_VERSION);
+        assert_eq!(loaded.concepts.len(), 1);
+    }
+
+    #[test]
+    fn a_newer_format_version_is_refused() {
+        let file = NamedTempFile::new().unwrap();
+        let newer = FORMAT_VERSION + 1;
+        std::fs::write(
+            file.path(),
+            format!(r#"{{"version":{newer},"concepts":[],"tasks":[]}}"#),
+        )
+        .unwrap();
+        match load(file.path()) {
+            Err(StoreError::UnsupportedVersion { found, supported }) => {
+                assert_eq!(found, newer);
+                assert_eq!(supported, FORMAT_VERSION);
+            }
+            other => panic!("expected UnsupportedVersion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_unknown_field_is_a_parse_error_not_silent_loss() {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(
+            file.path(),
+            r#"{"version":2,"concepts":[],"tasks":[{"id":1,"name":"T","future":true}]}"#,
+        )
+        .unwrap();
+        match load(file.path()) {
+            Err(StoreError::ParseError(e)) => {
+                assert!(e.to_string().contains("unknown field `future`"), "{e}");
+            }
+            other => panic!("expected ParseError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn refs_survive_a_save_load_roundtrip_and_are_absent_when_empty() {
+        use crate::model::reference::RefOwner;
+        let mut project = Project::new();
+        let tid = project.add_task("T".into(), None, None, None).unwrap();
+        project.add_task("U".into(), None, None, None).unwrap();
+        project.add_ref(RefOwner::Task(tid), "wiki/a.md#x").unwrap();
+
+        let file = NamedTempFile::new().unwrap();
+        save(file.path(), &project).unwrap();
+        let text = std::fs::read_to_string(file.path()).unwrap();
+        assert_eq!(text.matches("\"refs\"").count(), 1, "{text}");
+
+        let loaded = load(file.path()).unwrap();
+        assert_eq!(loaded.tasks[0].refs, vec!["wiki/a.md#x"]);
+        assert!(loaded.tasks[1].refs.is_empty());
     }
 
     #[test]

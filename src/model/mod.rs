@@ -8,5 +8,6 @@
 pub mod concept;
 pub mod id;
 pub mod project;
+pub mod reference;
 pub mod task;
 pub mod validate;

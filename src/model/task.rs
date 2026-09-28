@@ -47,7 +47,11 @@ impl std::str::FromStr for TaskState {
 }
 
 /// A unit of work that can depend on other tasks and be tagged with concepts.
+///
+/// Unknown fields are refused on load so a file written by a newer mindtask is
+/// rejected rather than read with data silently dropped on the next save.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Task {
     /// Unique identifier.
     pub id: TaskId,
@@ -72,6 +76,12 @@ pub struct Task {
     /// Concepts this task is tagged with.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub concepts: Vec<ConceptId>,
+    /// Citations: URI references to pages this task is grounded in — see
+    /// [`reference`](super::reference). Relative refs name files relative to
+    /// the project file's directory; absolute ones (with a scheme) are kept
+    /// verbatim. Insertion order, no duplicates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refs: Vec<String>,
 }
 
 /// Parse a due date string, falling back to the given default timezone
@@ -133,6 +143,7 @@ mod tests {
             due: None,
             depends_on: vec![],
             concepts: vec![ConceptId(3)],
+            refs: vec![],
         };
         let json = serde_json::to_string_pretty(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();
@@ -154,6 +165,7 @@ mod tests {
             due: Some(due),
             depends_on: vec![],
             concepts: vec![],
+            refs: vec![],
         };
         let json = serde_json::to_string_pretty(&task).unwrap();
         let parsed: Task = serde_json::from_str(&json).unwrap();
@@ -175,10 +187,12 @@ mod tests {
             due: None,
             depends_on: vec![],
             concepts: vec![],
+            refs: vec![],
         };
         let json = serde_json::to_string(&task).unwrap();
         assert!(!json.contains("depends_on"));
         assert!(!json.contains("concepts"));
+        assert!(!json.contains("refs"));
         assert!(!json.contains("description"));
         assert!(!json.contains("duration"));
         assert!(!json.contains("due"));

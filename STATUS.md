@@ -1,6 +1,18 @@
 # mindtask — Status
 
-## Current Phase: Scheduling (Phase 6) + graph import + description output (0.11.0)
+## Current Phase: Refs (Phase 6.5) on top of scheduling, import, and description output (0.12.0)
+
+**0.12.0 (2026-09-28): refs + format version 2** — tasks and concepts carry
+`refs`, a list of URI references citing the pages they are grounded in
+(relative paths resolve against the project file's directory and are checked
+for existence by `validate`; URLs are syntax-only). `ref add/rm/ls/mv`,
+`--ref` on both `add` commands, `Refs:` in both `show`s, refs in `search`.
+The bridge from the action layer to a knowledge bundle, designed in
+[docs/REFS-PLAN.md](docs/REFS-PLAN.md). With it the first file-format bump:
+`version` is `2`, newer files and unknown fields are refused on load instead
+of being read and silently truncated on save. Pre-0.12 binaries *do* drop refs
+on save — upgrade every writer of a shared file first. Not yet published to
+crates.io; PlantUML hyperlinks (R4 of the plan) deferred, low priority.
 
 **0.10.1 (2026-09-13): metadata-only** — the repository moved from sourcehut to
 GitHub (`https://github.com/theHausdorffMetric/mindtask`); `Cargo.toml`
@@ -127,6 +139,17 @@ Not yet published to crates.io.
 - [x] Relative day-offsets; no-duration tasks are zero-day milestones
 - See `docs/PHASE-6-PLAN.md` (6.4 — calendar anchoring / deadline slack — deferred)
 
+### Phase 6.5: Refs (citations) — 0.12.0
+- [x] `refs: Vec<String>` on `Task` and `Concept`; `validate_ref` boundary rule
+- [x] `model::reference` (pure classification) + `mindtask::refs` (filesystem check)
+- [x] `Project::{add_ref, remove_ref, rename_ref, refs}`
+- [x] `mindtask ref add/rm/ls/mv`, `--ref` on `task add` / `concept add`
+- [x] `validate` fails on a missing relative target; operational commands never blocked
+- [x] `Refs:` in `task show` / `concept show`; refs searched by `search`
+- [x] `FORMAT_VERSION = 2`; newer files and unknown fields refused on load
+- [x] 12 binary-level tests (`tests/refs.rs`) + unit tests across model/store/refs
+- See `docs/REFS-PLAN.md` (R4 — PlantUML hyperlinks — deferred)
+
 ## Architecture
 
 ```
@@ -148,7 +171,8 @@ src/
 | ID format | Auto-increment integers (separate sequences per type) |
 | Task state | `todo` / `in_progress` / `done` |
 | Dependency types | Finish-to-start only |
-| File format version | `"version": 1` in JSON root |
+| File format version | `"version": 2` in JSON root (0.12.0); newer versions and unknown fields refused on load |
+| Refs | Plain URI references, relative to the project file; existence is the only check |
 | Error handling | `thiserror` in library, `anyhow` in CLI |
 | Graph library | petgraph (transient graph for validation) |
 
@@ -157,6 +181,9 @@ src/
 ### Phase 6.4: Scheduling extras (deferred)
 - [ ] `--start <DATE>` calendar anchoring (jiff + project timezone)
 - [ ] `due` overlay / deadline-driven backward pass (negative slack)
+
+### Refs R4 (deferred, low priority)
+- [ ] First ref of a node as a PlantUML `[[…]]` hyperlink; settle the base for relative refs first (`docs/REFS-PLAN.md`)
 
 ### Phase 7: Polish
 - [ ] Mermaid diagram export

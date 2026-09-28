@@ -3,13 +3,27 @@
 //! [`Project`] owns the concept tree and task list, allocates IDs, and enforces
 //! structural invariants (no cycles, no dangling references) on every mutation.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use super::concept::Concept;
 use super::id::{ConceptId, TaskId};
+use super::reference::{RefOwner, path_part};
 use super::task::{Task, TaskState};
-use super::validate::{validate_duration, validate_name};
+use super::validate::{validate_duration, validate_name, validate_ref};
 use jiff::Zoned;
+
+/// The project-file format version this build reads and writes.
+///
+/// - `1` — the original format.
+/// - `2` (0.12.0) — `refs` on tasks and concepts.
+///
+/// A file with a *higher* number was written by a newer mindtask and is
+/// refused on load rather than read with fields silently dropped; an older
+/// file loads unchanged and is marked with the current version on its next
+/// save.
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Errors from project mutation operations.
 #[derive(Debug, thiserror::Error)]
@@ -70,6 +84,30 @@ pub enum ProjectError {
     /// A duration was not a finite, non-negative number of days.
     #[error("duration must be a finite, non-negative number of days (got {0})")]
     InvalidDuration(f64),
+    /// A ref failed [`validate_ref`].
+    #[error("invalid ref '{uri}': {reason}")]
+    InvalidRef {
+        /// The offending value, trimmed.
+        uri: String,
+        /// Why it was refused.
+        reason: &'static str,
+    },
+    /// The owner already holds this exact ref.
+    #[error("{owner} already has ref '{uri}'")]
+    DuplicateRef {
+        /// The task or concept.
+        owner: RefOwner,
+        /// The ref.
+        uri: String,
+    },
+    /// The owner does not hold this ref.
+    #[error("{owner} has no ref '{uri}'")]
+    RefNotFound {
+        /// The task or concept.
+        owner: RefOwner,
+        /// The ref.
+        uri: String,
+    },
 }
 
 /// Render task IDs for an error message: `1, 2, 3`.
@@ -128,9 +166,13 @@ pub type Result<T> = std::result::Result<T, ProjectError>;
 ///
 /// ID counters (`next_concept_id`, `next_task_id`) are not serialized — they
 /// are recomputed from the stored data via [`recompute_next_ids`](Self::recompute_next_ids).
+///
+/// Unknown fields are refused on load so a file written by a newer mindtask is
+/// rejected rather than read with data silently dropped on the next save.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Project {
-    /// Schema version number.
+    /// File-format version — see [`FORMAT_VERSION`].
     pub version: u32,
     /// Default IANA timezone for due-date parsing (e.g. `"America/New_York"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -152,10 +194,10 @@ pub struct Project {
 }
 
 impl Project {
-    /// Create an empty project with version 1.
+    /// Create an empty project at the current [`FORMAT_VERSION`].
     pub fn new() -> Self {
         Self {
-            version: 1,
+            version: FORMAT_VERSION,
             timezone: None,
             wrap_width: None,
             concepts: Vec::new(),
@@ -281,6 +323,7 @@ impl Project {
                     name: c.name.clone(),
                     description: c.description.clone(),
                     parent: c.parent.map(|p| map[&p]),
+                    refs: c.refs.clone(),
                 }
             })
             .collect();
@@ -314,6 +357,7 @@ impl Project {
             name,
             description,
             parent,
+            refs: Vec::new(),
         });
         Ok(id)
     }
@@ -502,6 +546,7 @@ impl Project {
             due,
             depends_on: Vec::new(),
             concepts: Vec::new(),
+            refs: Vec::new(),
         });
         Ok(id)
     }
@@ -609,6 +654,111 @@ impl Project {
         task.due = due;
         Ok(())
     }
+
+    // --- Refs ---
+
+    /// The refs of `owner`, mutably. `Err` when the owner does not exist.
+    fn refs_of_mut(&mut self, owner: RefOwner) -> Result<&mut Vec<String>> {
+        match owner {
+            RefOwner::Task(id) => self
+                .get_task_mut(id)
+                .map(|t| &mut t.refs)
+                .ok_or(ProjectError::TaskNotFound(id)),
+            RefOwner::Concept(id) => self
+                .concepts
+                .iter_mut()
+                .find(|c| c.id == id)
+                .map(|c| &mut c.refs)
+                .ok_or(ProjectError::ConceptNotFound(id)),
+        }
+    }
+
+    /// Attach a ref — a URI reference, see [`validate_ref`] — to a task or
+    /// concept. Refs keep insertion order. `Err` when the owner does not
+    /// exist, the ref is invalid, or the owner already holds the identical
+    /// string.
+    pub fn add_ref(&mut self, owner: RefOwner, uri: &str) -> Result<()> {
+        let uri = validate_ref(uri)?;
+        let refs = self.refs_of_mut(owner)?;
+        if refs.contains(&uri) {
+            return Err(ProjectError::DuplicateRef { owner, uri });
+        }
+        refs.push(uri);
+        Ok(())
+    }
+
+    /// Detach a ref by exact (trimmed) string. `Err` when the owner does not
+    /// exist or holds no such ref.
+    pub fn remove_ref(&mut self, owner: RefOwner, uri: &str) -> Result<()> {
+        let uri = uri.trim();
+        let refs = self.refs_of_mut(owner)?;
+        let before = refs.len();
+        refs.retain(|r| r != uri);
+        if refs.len() == before {
+            return Err(ProjectError::RefNotFound {
+                owner,
+                uri: uri.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Rewrite every ref whose path part (everything before `#`) is exactly
+    /// `old` to use `new` instead, keeping each ref's own fragment — the
+    /// remedy for a cited page being renamed. `new` must pass
+    /// [`validate_ref`]; it is checked before anything changes. If a rewrite
+    /// would duplicate a ref its owner already holds, the duplicate is
+    /// dropped. Returns how many refs were rewritten.
+    pub fn rename_ref(&mut self, old: &str, new: &str) -> Result<usize> {
+        let new = validate_ref(new)?;
+        let old = old.trim();
+        if old == new {
+            return Ok(0);
+        }
+        let mut changed = 0;
+        let lists = self
+            .concepts
+            .iter_mut()
+            .map(|c| &mut c.refs)
+            .chain(self.tasks.iter_mut().map(|t| &mut t.refs));
+        for refs in lists {
+            let rewritten: Vec<String> = refs
+                .iter()
+                .map(|r| {
+                    if path_part(r) != old {
+                        return r.clone();
+                    }
+                    changed += 1;
+                    match r.split_once('#') {
+                        Some((_, fragment)) => format!("{new}#{fragment}"),
+                        None => new.clone(),
+                    }
+                })
+                .collect();
+            let mut seen = HashSet::new();
+            *refs = rewritten
+                .into_iter()
+                .filter(|r| seen.insert(r.clone()))
+                .collect();
+        }
+        Ok(changed)
+    }
+
+    /// Every ref in the project with its owner — the citation table. Concepts
+    /// first, then tasks, each in file order.
+    pub fn refs(&self) -> impl Iterator<Item = (RefOwner, &str)> {
+        let concepts = self.concepts.iter().flat_map(|c| {
+            c.refs
+                .iter()
+                .map(move |r| (RefOwner::Concept(c.id), r.as_str()))
+        });
+        let tasks = self.tasks.iter().flat_map(|t| {
+            t.refs
+                .iter()
+                .map(move |r| (RefOwner::Task(t.id), r.as_str()))
+        });
+        concepts.chain(tasks)
+    }
 }
 
 impl Default for Project {
@@ -624,7 +774,7 @@ mod tests {
     #[test]
     fn new_project() {
         let p = Project::new();
-        assert_eq!(p.version, 1);
+        assert_eq!(p.version, FORMAT_VERSION);
         assert!(p.concepts.is_empty());
         assert!(p.tasks.is_empty());
         assert_eq!(p.next_concept_id, 1);
@@ -653,11 +803,179 @@ mod tests {
         let mut parsed: Project = serde_json::from_str(&json).unwrap();
         parsed.recompute_next_ids();
 
-        assert_eq!(parsed.version, 1);
+        assert_eq!(parsed.version, FORMAT_VERSION);
         assert_eq!(parsed.concepts.len(), 2);
         assert_eq!(parsed.tasks.len(), 1);
         assert_eq!(parsed.next_concept_id, 3);
         assert_eq!(parsed.next_task_id, 2);
+    }
+
+    #[test]
+    fn unknown_fields_are_refused_at_every_level() {
+        for json in [
+            r#"{"version":2,"concepts":[],"tasks":[],"extra":1}"#,
+            r#"{"version":2,"concepts":[{"id":1,"name":"A","extra":1}],"tasks":[]}"#,
+            r#"{"version":2,"concepts":[],"tasks":[{"id":1,"name":"T","extra":1}]}"#,
+        ] {
+            let err = serde_json::from_str::<Project>(json).unwrap_err();
+            assert!(
+                err.to_string().contains("unknown field `extra`"),
+                "{json}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_status_alias_for_state_still_loads() {
+        let json = r#"{"version":1,"concepts":[],"tasks":[{"id":1,"name":"T","status":"done"}]}"#;
+        let p: Project = serde_json::from_str(json).unwrap();
+        assert_eq!(p.tasks[0].state, TaskState::Done);
+    }
+
+    // --- Ref tests ---
+
+    fn project_with_one_of_each() -> (Project, RefOwner, RefOwner) {
+        let mut p = Project::new();
+        let cid = p.add_concept("C".into(), None, None).unwrap();
+        let tid = p.add_task("T".into(), None, None, None).unwrap();
+        (p, RefOwner::Concept(cid), RefOwner::Task(tid))
+    }
+
+    #[test]
+    fn add_ref_keeps_insertion_order_and_trims() {
+        let (mut p, c, t) = project_with_one_of_each();
+        p.add_ref(t, "b.md").unwrap();
+        p.add_ref(t, "  a.md#x ").unwrap();
+        p.add_ref(c, "https://example.org/").unwrap();
+        assert_eq!(p.tasks[0].refs, vec!["b.md", "a.md#x"]);
+        assert_eq!(p.concepts[0].refs, vec!["https://example.org/"]);
+    }
+
+    #[test]
+    fn add_ref_rejects_missing_owner_duplicate_and_invalid() {
+        let (mut p, _, t) = project_with_one_of_each();
+        assert!(matches!(
+            p.add_ref(RefOwner::Task(TaskId(99)), "a.md"),
+            Err(ProjectError::TaskNotFound(TaskId(99)))
+        ));
+        assert!(matches!(
+            p.add_ref(RefOwner::Concept(ConceptId(99)), "a.md"),
+            Err(ProjectError::ConceptNotFound(ConceptId(99)))
+        ));
+        p.add_ref(t, "a.md").unwrap();
+        match p.add_ref(t, " a.md ") {
+            Err(ProjectError::DuplicateRef { owner, uri }) => {
+                assert_eq!(owner, t);
+                assert_eq!(uri, "a.md");
+            }
+            other => panic!("expected DuplicateRef, got {other:?}"),
+        }
+        assert!(matches!(
+            p.add_ref(t, "/abs.md"),
+            Err(ProjectError::InvalidRef { .. })
+        ));
+        assert_eq!(p.tasks[0].refs, vec!["a.md"]);
+    }
+
+    #[test]
+    fn remove_ref_by_exact_string() {
+        let (mut p, _, t) = project_with_one_of_each();
+        p.add_ref(t, "a.md").unwrap();
+        p.add_ref(t, "a.md#x").unwrap();
+        p.remove_ref(t, "a.md").unwrap();
+        assert_eq!(p.tasks[0].refs, vec!["a.md#x"]);
+        match p.remove_ref(t, "a.md") {
+            Err(ProjectError::RefNotFound { owner, uri }) => {
+                assert_eq!(owner, t);
+                assert_eq!(uri, "a.md");
+            }
+            other => panic!("expected RefNotFound, got {other:?}"),
+        }
+        assert!(matches!(
+            p.remove_ref(RefOwner::Task(TaskId(99)), "a.md"),
+            Err(ProjectError::TaskNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn rename_ref_rewrites_the_path_part_and_keeps_fragments() {
+        let (mut p, c, t) = project_with_one_of_each();
+        p.add_ref(t, "old.md").unwrap();
+        p.add_ref(t, "old.md#sec").unwrap();
+        p.add_ref(t, "other.md").unwrap();
+        p.add_ref(c, "old.md#top").unwrap();
+        p.add_ref(c, "https://h/old.md").unwrap();
+
+        assert_eq!(p.rename_ref("old.md", "new/page.md").unwrap(), 3);
+        assert_eq!(
+            p.tasks[0].refs,
+            vec!["new/page.md", "new/page.md#sec", "other.md"]
+        );
+        assert_eq!(
+            p.concepts[0].refs,
+            vec!["new/page.md#top", "https://h/old.md"]
+        );
+    }
+
+    #[test]
+    fn rename_ref_is_a_no_op_when_old_is_absent_or_equal() {
+        let (mut p, _, t) = project_with_one_of_each();
+        p.add_ref(t, "a.md").unwrap();
+        assert_eq!(p.rename_ref("zzz.md", "b.md").unwrap(), 0);
+        assert_eq!(p.rename_ref("a.md", "a.md").unwrap(), 0);
+        assert_eq!(p.tasks[0].refs, vec!["a.md"]);
+    }
+
+    #[test]
+    fn rename_ref_validates_new_before_changing_anything() {
+        let (mut p, _, t) = project_with_one_of_each();
+        p.add_ref(t, "a.md").unwrap();
+        assert!(matches!(
+            p.rename_ref("a.md", "has space.md"),
+            Err(ProjectError::InvalidRef { .. })
+        ));
+        assert_eq!(p.tasks[0].refs, vec!["a.md"]);
+    }
+
+    #[test]
+    fn rename_ref_drops_a_rewrite_that_would_duplicate() {
+        let (mut p, _, t) = project_with_one_of_each();
+        p.add_ref(t, "old.md").unwrap();
+        p.add_ref(t, "new.md").unwrap();
+        assert_eq!(p.rename_ref("old.md", "new.md").unwrap(), 1);
+        assert_eq!(p.tasks[0].refs, vec!["new.md"]);
+    }
+
+    #[test]
+    fn refs_lists_concepts_then_tasks_in_file_order() {
+        let (mut p, c, t) = project_with_one_of_each();
+        p.add_ref(t, "t1.md").unwrap();
+        p.add_ref(c, "c1.md").unwrap();
+        p.add_ref(t, "t2.md").unwrap();
+        let all: Vec<_> = p.refs().collect();
+        assert_eq!(all, vec![(c, "c1.md"), (t, "t1.md"), (t, "t2.md")]);
+    }
+
+    #[test]
+    fn normalization_preserves_concept_refs() {
+        let mut p = Project::new();
+        p.add_concept("Second".into(), None, None).unwrap();
+        p.add_concept("First".into(), None, None).unwrap();
+        p.move_concept_positioned(ConceptId(2), Placement::Before(ConceptId(1)))
+            .unwrap();
+        p.add_ref(RefOwner::Concept(ConceptId(2)), "first.md")
+            .unwrap();
+        p.add_ref(RefOwner::Concept(ConceptId(1)), "second.md")
+            .unwrap();
+
+        let plan = p.plan_normalization().unwrap();
+        assert!(!plan.is_identity());
+        p.apply_normalization(&plan);
+
+        assert_eq!(p.concepts[0].name, "First");
+        assert_eq!(p.concepts[0].refs, vec!["first.md"]);
+        assert_eq!(p.concepts[1].name, "Second");
+        assert_eq!(p.concepts[1].refs, vec!["second.md"]);
     }
 
     // --- Concept CRUD tests ---
@@ -795,6 +1113,7 @@ mod tests {
             name: format!("c{id}"),
             description: None,
             parent: parent.map(ConceptId),
+            refs: vec![],
         };
         p.concepts.push(c(10, None));
         p.concepts.push(c(3, Some(10)));
@@ -820,6 +1139,7 @@ mod tests {
             name: format!("c{id}"),
             description: None,
             parent: parent.map(ConceptId),
+            refs: vec![],
         };
         p.concepts.push(c(5, None));
         p.concepts.push(c(2, Some(5)));

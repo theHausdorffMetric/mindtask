@@ -10,7 +10,7 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.11.0"
+  documents-version: "0.12.0"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
@@ -24,8 +24,17 @@ a read-only directory instead of silently succeeding.
 
 Inputs are validated at the boundary: names are trimmed and must be non-empty
 with no control characters (tab, newline); `--duration` must be a finite number
-of days ≥ 0 (`0` is a milestone). Rejected values exit non-zero and leave the
+of days ≥ 0 (`0` is a milestone); refs must be well-formed URI references (see
+[Refs](#refs-citations-to-pages)). Rejected values exit non-zero and leave the
 file untouched.
+
+The file format is **version 2** (since 0.12.0: `refs` on tasks and
+concepts). A file declaring a newer version, or carrying a field this build
+does not know, is refused with a message to upgrade mindtask — never read with
+data silently dropped. Older (version 1) files load unchanged and are marked
+`2` on their next save. **Binaries older than 0.12.0 do drop `refs` on save**,
+so upgrade every machine that writes a shared project file before the first
+`ref add`.
 
 ## Command reference
 
@@ -33,7 +42,7 @@ file untouched.
 
 ```
 mindtask init [--timezone <IANA>]     # Create .mindtask.json
-mindtask validate                     # Check file integrity
+mindtask validate                     # Check file integrity + that every relative ref's file exists (non-zero on a broken ref)
 mindtask config timezone [TZ]         # Get/set timezone (--show to display)
 mindtask config wrap-width [COLS]     # Get/set description wrap width (--show to display, --clear to auto-detect)
 mindtask report [-d[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + task list; -d adds descriptions to both halves
@@ -141,6 +150,34 @@ mindtask link <TASK_ID> <CONCEPT_ID>
 mindtask unlink <TASK_ID> <CONCEPT_ID>
 ```
 
+### Refs (citations to pages)
+
+```
+mindtask ref add (--task <ID> | --concept <ID>) <URI>   # Attach a citation
+mindtask ref rm  (--task <ID> | --concept <ID>) <URI>   # Detach it (exact string)
+mindtask ref ls [--broken]                              # Citation table: KIND ID NAME REF STATUS (ok | missing | external)
+mindtask ref mv <OLD> <NEW> [--dry-run]                 # After a page rename: rewrite every ref whose path is OLD (fragments kept)
+mindtask task add <NAME> --ref <URI> ...                # Attach at creation (repeatable); same for concept add
+```
+
+A ref is a URI reference stored verbatim — the bridge from a work item to the
+knowledge it is grounded in (an OKF bundle page, a doc, a URL). Two kinds:
+
+- **Relative** (`knowledge/llm-wiki.md`, `RND/log.md#2026-08-01`, `RND/`): a
+  path relative to the **project file's directory**, never the cwd, so `-f`
+  from elsewhere resolves it the same way. `validate` fails (non-zero) when
+  the file is missing; a `#fragment` is kept but not checked; a directory
+  counts as existing.
+- **Absolute** (`https://…`, `mailto:…`): has a scheme; syntax-checked only,
+  never fetched; shown as `external` by `ref ls`.
+
+Rejected: empty, any whitespace or control character, filesystem-absolute
+paths (`/home/…`, `C:\…` — not portable across clones), a bare `#fragment`.
+The same string twice on one owner is a duplicate. `task show` / `concept
+show` print a `Refs:` block, one per line; `search` matches refs and prints
+the hit beneath the row. A broken ref never blocks an operational command —
+only `validate` and `ref ls` look at the filesystem.
+
 ### Search
 
 ```
@@ -148,7 +185,7 @@ mindtask search <QUERY> [-d]          # -d also searches descriptions, and shows
 ```
 
 Case-insensitive substring match across concepts and tasks. Plain `search`
-matches names only. With `-d` it also matches description text and prints an
+matches names and refs. With `-d` it also matches description text and prints an
 excerpt of the surrounding text beneath the row, `…` marking each trimmed end —
 so a hit always explains itself (including an unexpected substring match, e.g.
 `search ARP -d` matching "K**arp**athy"). Here `-d` is a plain boolean; it takes
@@ -240,14 +277,16 @@ Due dates accept these formats:
 
 ## Data model
 
-- **Concepts** form a tree (forest). Each concept has an ID, name, optional description, and optional parent.
-- **Tasks** form a DAG via dependencies. Each task has an ID, name, optional description, state (`todo`/`in_progress`/`done`), optional duration (days), and optional due date.
+- **Concepts** form a tree (forest). Each concept has an ID, name, optional description, optional parent, and refs.
+- **Tasks** form a DAG via dependencies. Each task has an ID, name, optional description, state (`todo`/`in_progress`/`done`), optional duration (days), optional due date, and refs.
 - **Links** bridge concepts and tasks — a task can be linked to one or more concepts.
+- **Refs** point outward — URI references (bundle-relative paths or URLs) citing the pages a task or concept is grounded in.
 
 ## Workflow tips
 
 - Always `mindtask init` before other commands — it creates `.mindtask.json`.
 - Build the concept tree first, then add tasks, linking them at creation with `task add --concept <ID>` (repeatable) instead of a separate `link` step.
+- Cite the page a task or concept is grounded in with `--ref <PATH>` at creation or `ref add` later, rather than only naming it in the description: `validate` checks refs, prose it cannot. After renaming a cited page, `ref mv <OLD> <NEW>` fixes every citation.
 - `add` commands echo the new ID (`Added task 1 "..."`); capture it from that output instead of re-running `search`/`ls`.
 - Use `mindtask concept tree` to review structure before exporting; add `-d` to see each concept's description inline.
 - To survey what a project is actually about, `mindtask report -d=short --state all` — one lede per concept and task. See [Descriptions](#descriptions--d); note the `=` is required.

@@ -78,6 +78,45 @@ fn snippet_block(
     Some(format!("{}{}", " ".repeat(DESC_INDENT), text))
 }
 
+/// The matching refs shown beneath a row, one per line, or `None` when none
+/// matched. Refs are short and structured like names, so they are always
+/// searched; the block makes the hit visible since refs are not a column.
+fn ref_block(refs: &[String], query: &str, width: usize) -> Option<String> {
+    let avail = avail_width(width, DESC_INDENT);
+    let hits: Vec<String> = refs
+        .iter()
+        .filter(|r| matches(r, query))
+        .map(|r| format!("{}{}", " ".repeat(DESC_INDENT), truncate(r, avail)))
+        .collect();
+    if hits.is_empty() {
+        None
+    } else {
+        Some(hits.join("\n"))
+    }
+}
+
+/// Stack the description excerpt and the ref hits beneath one row.
+fn row_block(
+    description: Option<&str>,
+    refs: &[String],
+    query: &str,
+    search_description: bool,
+    width: usize,
+) -> Option<String> {
+    let parts: Vec<String> = [
+        snippet_block(description, query, search_description, width),
+        ref_block(refs, query, width),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("\n"))
+    }
+}
+
 pub fn search(project: &Project, query: &str, search_description: bool) {
     let query = query.to_lowercase();
     let width = resolve_wrap_width(project);
@@ -87,6 +126,7 @@ pub fn search(project: &Project, query: &str, search_description: bool) {
         .iter()
         .filter(|c| {
             matches(&c.name, &query)
+                || c.refs.iter().any(|r| matches(r, &query))
                 || (search_description
                     && c.description.as_deref().is_some_and(|d| matches(d, &query)))
         })
@@ -97,6 +137,7 @@ pub fn search(project: &Project, query: &str, search_description: bool) {
         .iter()
         .filter(|t| {
             matches(&t.name, &query)
+                || t.refs.iter().any(|r| matches(r, &query))
                 || (search_description
                     && t.description.as_deref().is_some_and(|d| matches(d, &query)))
         })
@@ -120,7 +161,15 @@ pub fn search(project: &Project, query: &str, search_description: bool) {
             .collect();
         let blocks: Vec<Option<String>> = matching_concepts
             .iter()
-            .map(|c| snippet_block(c.description.as_deref(), &query, search_description, width))
+            .map(|c| {
+                row_block(
+                    c.description.as_deref(),
+                    &c.refs,
+                    &query,
+                    search_description,
+                    width,
+                )
+            })
             .collect();
         println!(
             "{}",
@@ -142,7 +191,15 @@ pub fn search(project: &Project, query: &str, search_description: bool) {
             .collect();
         let blocks: Vec<Option<String>> = matching_tasks
             .iter()
-            .map(|t| snippet_block(t.description.as_deref(), &query, search_description, width))
+            .map(|t| {
+                row_block(
+                    t.description.as_deref(),
+                    &t.refs,
+                    &query,
+                    search_description,
+                    width,
+                )
+            })
             .collect();
         println!(
             "{}",

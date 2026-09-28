@@ -192,6 +192,7 @@ mod tests {
             name: "Dup".into(),
             description: None,
             parent: None,
+            refs: vec![],
         });
         let err = validate_project(&p).unwrap_err();
         assert!(err.contains("duplicate concept ID 1"), "got: {err}");
@@ -210,6 +211,7 @@ mod tests {
             due: None,
             depends_on: vec![],
             concepts: vec![],
+            refs: vec![],
         });
         let err = validate_project(&p).unwrap_err();
         assert!(err.contains("duplicate task ID 1"), "got: {err}");

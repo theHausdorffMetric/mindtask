@@ -2,13 +2,29 @@ use anyhow::{Context, Result};
 
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::Project;
+use mindtask::model::reference::RefOwner;
 use mindtask::model::task::{Task, TaskState, parse_due};
-use mindtask::model::validate::validate_duration;
+use mindtask::model::validate::{validate_duration, validate_ref};
 
+use super::reference::print_refs;
 use super::render::{
     DESC_INDENT, DescMode, desc_block, render_table_with_blocks, resolve_wrap_width, wrap_block,
 };
 use super::state_filter::{StateFilter, hidden_footer};
+
+/// Check a `--ref` list up front — each value valid, no repeats — so a bad
+/// one is reported before the task or concept is created, with the same
+/// wording `ref add` would use.
+pub(super) fn check_refs(refs: &[String]) -> Result<()> {
+    let mut seen = std::collections::HashSet::new();
+    for r in refs {
+        let stored = validate_ref(r).context("invalid --ref")?;
+        if !seen.insert(stored.clone()) {
+            anyhow::bail!("duplicate --ref '{stored}'");
+        }
+    }
+    Ok(())
+}
 
 /// clap `value_parser` for `--duration`: the model rule, applied at the parse
 /// boundary so the error names the flag.
@@ -92,6 +108,7 @@ pub fn add(
     duration: Option<f64>,
     due: Option<String>,
     concepts: Vec<ConceptId>,
+    refs: Vec<String>,
 ) -> Result<()> {
     let due = due
         .map(|d| parse_due(&d, project.timezone_or_utc()))
@@ -105,6 +122,7 @@ pub fn add(
             anyhow::bail!("concept {cid} not found");
         }
     }
+    check_refs(&refs)?;
 
     let id = project
         .add_task(name, description, duration, due)
@@ -115,21 +133,31 @@ pub fn add(
             .link_concept(id, *cid)
             .context("failed to link concept")?;
     }
+    for r in &refs {
+        // Refs validated above.
+        project
+            .add_ref(RefOwner::Task(id), r)
+            .context("failed to add ref")?;
+    }
 
     // Echo the stored name: the model trims it.
-    let name = &project.get_task(id).expect("task was just added").name;
-    if concepts.is_empty() {
-        println!("Added task {id} \"{name}\"");
-    } else {
+    let task = project.get_task(id).expect("task was just added");
+    let mut notes = Vec::new();
+    if !concepts.is_empty() {
         let linked = concepts
             .iter()
             .map(|c| c.to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        println!(
-            "Added task {} \"{}\" (linked to concept(s) {})",
-            id, name, linked
-        );
+        notes.push(format!("linked to concept(s) {linked}"));
+    }
+    if !task.refs.is_empty() {
+        notes.push(format!("refs: {}", task.refs.join(", ")));
+    }
+    if notes.is_empty() {
+        println!("Added task {id} \"{}\"", task.name);
+    } else {
+        println!("Added task {id} \"{}\" ({})", task.name, notes.join("; "));
     }
     Ok(())
 }
@@ -274,6 +302,8 @@ pub fn show(project: &Project, id: TaskId) -> Result<()> {
             .collect();
         println!("Concepts:    {}", concept_strs.join(", "));
     }
+
+    print_refs(&task.refs);
 
     Ok(())
 }

@@ -8,7 +8,11 @@ use super::id::ConceptId;
 ///
 /// Concepts form a tree via the optional [`parent`](Self::parent) field.
 /// A concept with no parent is a root node.
+///
+/// Unknown fields are refused on load so a file written by a newer mindtask is
+/// rejected rather than read with data silently dropped on the next save.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Concept {
     /// Unique identifier.
     pub id: ConceptId,
@@ -20,6 +24,10 @@ pub struct Concept {
     /// Parent concept, or `None` for root concepts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent: Option<ConceptId>,
+    /// Citations: URI references to pages this concept is grounded in — see
+    /// [`reference`](super::reference). Same rules as [`Task::refs`](super::task::Task::refs).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refs: Vec<String>,
 }
 
 #[cfg(test)]
@@ -33,6 +41,7 @@ mod tests {
             name: "Backend".to_string(),
             description: Some("Server-side code".to_string()),
             parent: None,
+            refs: vec![],
         };
         let json = serde_json::to_string_pretty(&concept).unwrap();
         let parsed: Concept = serde_json::from_str(&json).unwrap();
@@ -49,6 +58,7 @@ mod tests {
             name: "Root".to_string(),
             description: None,
             parent: None,
+            refs: vec![],
         };
         let json = serde_json::to_string(&concept).unwrap();
         assert!(!json.contains("description"));
@@ -62,6 +72,7 @@ mod tests {
             name: "Child".to_string(),
             description: None,
             parent: Some(ConceptId(1)),
+            refs: vec![],
         };
         let json = serde_json::to_string(&concept).unwrap();
         assert!(json.contains("\"parent\":1"));

@@ -104,6 +104,7 @@ mod tests {
             due: None,
             depends_on: vec![],
             concepts: vec![],
+            refs: vec![],
         }
     }
 

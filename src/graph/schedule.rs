@@ -279,6 +279,7 @@ mod tests {
             due: None,
             depends_on: vec![TaskId(dep)],
             concepts: vec![],
+            refs: vec![],
         };
         let tasks = vec![mk(1, 2), mk(2, 1)];
         assert!(schedule(&tasks).is_err());

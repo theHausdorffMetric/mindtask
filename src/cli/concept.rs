@@ -6,28 +6,43 @@ use termtree::Tree;
 use mindtask::model::concept::Concept;
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::{Placement, Project};
+use mindtask::model::reference::RefOwner;
 
+use super::reference::print_refs;
 use super::render::{
     DescMode, avail_width, desc_text, render_table, render_table_with_blocks, resolve_wrap_width,
 };
 use super::state_filter::{StateFilter, hidden_footer};
-use super::task::{task_cells, task_desc_block};
+use super::task::{check_refs, task_cells, task_desc_block};
 
 pub fn add(
     project: &mut Project,
     name: String,
     parent: Option<ConceptId>,
     description: Option<String>,
+    refs: Vec<String>,
 ) -> Result<()> {
+    check_refs(&refs)?;
     let id = project
         .add_concept(name, parent, description)
         .context("failed to add concept")?;
+    for r in &refs {
+        // Refs validated above.
+        project
+            .add_ref(RefOwner::Concept(id), r)
+            .context("failed to add ref")?;
+    }
     // Echo the stored name: the model trims it.
-    let name = &project
-        .get_concept(id)
-        .expect("concept was just added")
-        .name;
-    println!("Added concept {id} \"{name}\"");
+    let concept = project.get_concept(id).expect("concept was just added");
+    if concept.refs.is_empty() {
+        println!("Added concept {id} \"{}\"", concept.name);
+    } else {
+        println!(
+            "Added concept {id} \"{}\" (refs: {})",
+            concept.name,
+            concept.refs.join(", ")
+        );
+    }
     Ok(())
 }
 
@@ -235,6 +250,8 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
             .collect();
         println!("Tasks:       {}", task_strs.join(", "));
     }
+
+    print_refs(&concept.refs);
 
     Ok(())
 }
