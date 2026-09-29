@@ -207,12 +207,10 @@ const GUTTER: usize = 2;
 /// Natural width per column (the widest of the header and any cell), with the
 /// `flex` column shrunk toward [`MIN_WRAP_WIDTH`] when the table would exceed
 /// `budget`. Over-long cells in the shrunk column are truncated on render.
-fn column_widths(
-    headers: &[&str],
-    rows: &[Vec<String>],
-    flex: Option<usize>,
-    budget: usize,
-) -> Vec<usize> {
+fn column_widths<'a, I>(headers: &[&str], rows: I, flex: Option<usize>, budget: usize) -> Vec<usize>
+where
+    I: IntoIterator<Item = &'a Vec<String>>,
+{
     let ncols = headers.len();
     let mut widths: Vec<usize> = headers.iter().map(|h| col_width(h)).collect();
     for row in rows {
@@ -260,16 +258,66 @@ pub fn render_table_with_blocks(
 ) -> String {
     let widths = column_widths(headers, rows, flex, budget);
     let gutter = " ".repeat(GUTTER);
-    let header_cells: Vec<String> = headers.iter().map(|h| h.to_string()).collect();
     let mut lines: Vec<String> = Vec::with_capacity(rows.len() + 1);
-    lines.push(render_row(&header_cells, &widths, &gutter));
+    lines.push(header_row(headers, &widths, &gutter));
+    push_rows(&mut lines, rows, blocks, &widths, &gutter);
+    lines.join("\n")
+}
+
+/// One titled run of rows inside a grouped table — see [`render_table_grouped`].
+pub struct TableGroup {
+    /// Printed on its own line above the group's rows.
+    pub title: String,
+    pub rows: Vec<Vec<String>>,
+    /// `blocks[i]` sits beneath `rows[i]`, as in [`render_table_with_blocks`].
+    pub blocks: Vec<Option<String>>,
+}
+
+/// Prefix of a group-title line inside a table, so it reads as a divider
+/// rather than as a row.
+pub const GROUP_MARK: &str = "── ";
+
+/// [`render_table_with_blocks`], with the rows split into titled groups. One
+/// header row and one set of column widths span every group, so the columns
+/// keep aligning across the whole table; each group's title is printed on its
+/// own line, prefixed with [`GROUP_MARK`] and truncated to `budget`.
+pub fn render_table_grouped(
+    headers: &[&str],
+    groups: &[TableGroup],
+    flex: Option<usize>,
+    budget: usize,
+) -> String {
+    let widths = column_widths(headers, groups.iter().flat_map(|g| &g.rows), flex, budget);
+    let gutter = " ".repeat(GUTTER);
+    let nrows: usize = groups.iter().map(|g| g.rows.len()).sum();
+    let mut lines: Vec<String> = Vec::with_capacity(nrows + groups.len() + 1);
+    lines.push(header_row(headers, &widths, &gutter));
+    for group in groups {
+        lines.push(truncate(&format!("{GROUP_MARK}{}", group.title), budget));
+        push_rows(&mut lines, &group.rows, &group.blocks, &widths, &gutter);
+    }
+    lines.join("\n")
+}
+
+fn header_row(headers: &[&str], widths: &[usize], gutter: &str) -> String {
+    let cells: Vec<String> = headers.iter().map(|h| h.to_string()).collect();
+    render_row(&cells, widths, gutter)
+}
+
+/// Append each row, followed by its block when one is given.
+fn push_rows(
+    lines: &mut Vec<String>,
+    rows: &[Vec<String>],
+    blocks: &[Option<String>],
+    widths: &[usize],
+    gutter: &str,
+) {
     for (i, row) in rows.iter().enumerate() {
-        lines.push(render_row(row, &widths, &gutter));
+        lines.push(render_row(row, widths, gutter));
         if let Some(Some(block)) = blocks.get(i) {
             lines.push(block.clone());
         }
     }
-    lines.join("\n")
 }
 
 /// Render one row: each cell truncated to its column width, left-padded except
@@ -504,5 +552,43 @@ mod tests {
         ];
         let out = render_table_with_blocks(&["ID", "NAME"], &rows, &[], Some(1), 200);
         assert_eq!(out.lines().count(), 3);
+    }
+
+    #[test]
+    fn grouped_table_shares_one_header_and_column_widths() {
+        let groups = vec![
+            TableGroup {
+                title: "A".into(),
+                rows: vec![vec!["1".into(), "x".into()]],
+                blocks: vec![],
+            },
+            TableGroup {
+                title: "B".into(),
+                rows: vec![vec!["20".into(), "longer".into()]],
+                blocks: vec![None],
+            },
+        ];
+        let out = render_table_grouped(&["ID", "NAME"], &groups, Some(1), 200);
+        let lines: Vec<&str> = out.lines().collect();
+        // The ID column is sized by the widest cell in *any* group.
+        assert_eq!(lines, ["ID  NAME", "── A", "1   x", "── B", "20  longer"]);
+    }
+
+    #[test]
+    fn grouped_table_truncates_titles_to_budget_and_keeps_blocks() {
+        let groups = vec![TableGroup {
+            title: "a very long group title".into(),
+            rows: vec![vec!["1".into(), "x".into()]],
+            blocks: vec![Some("     [note]".into())],
+        }];
+        let out = render_table_grouped(&["ID", "NAME"], &groups, Some(1), 12);
+        let lines: Vec<&str> = out.lines().collect();
+        assert_eq!(lines[1].chars().count(), 12, "got: {}", lines[1]);
+        assert!(
+            lines[1].starts_with(GROUP_MARK) && lines[1].ends_with('…'),
+            "got: {}",
+            lines[1]
+        );
+        assert_eq!(lines[3], "     [note]");
     }
 }

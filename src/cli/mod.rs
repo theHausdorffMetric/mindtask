@@ -4,6 +4,7 @@ mod import;
 mod project;
 mod reference;
 mod render;
+mod report;
 mod schedule;
 mod search;
 mod state_filter;
@@ -94,7 +95,8 @@ enum Command {
         /// Optional root ID (concept ID for tree/wbs, task ID for dag; not accepted for gantt)
         root: Option<String>,
     },
-    /// Report the whole project: concept tree followed by the task list
+    /// Report the whole project: the concept tree, then the tasks grouped by
+    /// concept in tree order (`task ls` is the flat, ID-ordered list)
     Report {
         /// Show descriptions: bare for the full text, `=short` for a
         /// one-line lede
@@ -508,11 +510,11 @@ pub fn run() -> Result<()> {
         Command::Report { description, state } => {
             let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
-            let description = description.unwrap_or_default();
-            concept::tree(&proj, None, description)?;
-            println!();
-            task::list(&proj, &StateFilter::new(&state), description);
-            Ok(())
+            report::run(
+                &proj,
+                &StateFilter::new(&state),
+                description.unwrap_or_default(),
+            )
         }
         Command::Schedule { critical } => {
             let path = resolve_project_file(file)?;

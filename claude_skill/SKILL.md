@@ -10,7 +10,7 @@ metadata:
   # Crate version this reference was last verified against. The
   # `skill_doc_sync` integration test fails on release if this drifts
   # from Cargo.toml — bump it here when cutting a new mindtask version.
-  documents-version: "0.12.0"
+  documents-version: "0.13.0"
 ---
 
 # mindtask — CLI for concept maps + task dependency graphs
@@ -45,7 +45,7 @@ mindtask init [--timezone <IANA>]     # Create .mindtask.json
 mindtask validate                     # Check file integrity + that every relative ref's file exists (non-zero on a broken ref)
 mindtask config timezone [TZ]         # Get/set timezone (--show to display)
 mindtask config wrap-width [COLS]     # Get/set description wrap width (--show to display, --clear to auto-detect)
-mindtask report [-d[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + task list; -d adds descriptions to both halves
+mindtask report [-d[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + tasks grouped by concept in tree order; -d adds descriptions to both halves
 ```
 
 ### Concepts (tree structure)
@@ -91,6 +91,16 @@ comma-separated or repeated combination of `todo`, `in_progress`, `done`, or
 `(hidden: 12 done — --state all to show)`; dependency IDs in `DEPENDS ON`
 stay verbatim even when the referenced task's row is hidden. In
 `concept report`, hidden direct tasks don't pull their upstream chains in.
+
+`report` groups its task table by concept: each task sits under its
+*primary* concept (the first it lists — the first `--concept` at `task add`,
+or the first `link`), groups run in the order the tree above prints them
+(depth-first, a parent's own tasks before its children's), and rows ascend by
+ID within a group. Group titles are breadcrumbs (`── Root › … › Name {ID}`).
+Concepts with no visible task get no group; tasks with no concept close the
+table under `(no concept)`; a multi-concept task appears once, all its
+concepts still in `CONCEPTS`. `task ls` is the flat, ID-ordered list — use
+it to look a task up by ID.
 
 ### Descriptions (`-d`)
 

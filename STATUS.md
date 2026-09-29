@@ -1,6 +1,16 @@
 # mindtask — Status
 
-## Current Phase: Refs (Phase 6.5) on top of scheduling, import, and description output (0.12.0)
+## Current Phase: Refs (Phase 6.5) on top of scheduling, import, and description output (0.13.0)
+
+**0.13.0 (2026-09-29): `report` grouped by concept** — the top-level
+report's task table is grouped under each task's primary (first-listed)
+concept, groups in the order the tree prints (DFS pre-order), rows by ID
+within a group, breadcrumb titles truncated to the wrap width; concepts with
+no visible task are skipped, unlinked tasks close the table under
+`(no concept)`, a multi-concept task appears once. `task ls` keeps the flat
+ID order as the lookup view. Output-only change (new `cli/report.rs`, a
+grouped table renderer in `cli/render.rs`); 11 binary tests in
+`tests/report_grouping.rs`. Not yet published to crates.io.
 
 **0.12.0 (2026-09-28): refs + format version 2** — tasks and concepts carry
 `refs`, a list of URI references citing the pages they are grounded in

@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-29
+
+The whole-project report now reads by project rather than by creation
+order. Output-only: no file-format, command, or library API change, but the
+report's row order is different, so a minor bump.
+
+### Changed
+- **`report` groups its task table by concept.** Each task sits under its
+  primary concept (the first it lists), the groups run in the order the
+  concept tree prints (DFS pre-order — a parent's own tasks before its
+  children's), and rows ascend by ID within a group. Group titles are
+  breadcrumbs (`── Root › … › Name {ID}`), truncated to the wrap width; one
+  header row and one set of column widths span the whole table. Concepts
+  with no visible task get no group; tasks with no concept close the table
+  under `(no concept)`; a multi-concept task appears once, every concept
+  still listed in `CONCEPTS`. The `--state` filter, its footer, and `-d`
+  behave as before. `task ls` is unchanged: the flat, ID-ordered list.
+
 ## [0.12.0] - 2026-09-28
 
 Refs: structured citations from tasks and concepts to pages elsewhere — the
@@ -380,7 +398,8 @@ rather than a patch bump; the CLI surface is unchanged.
   dependency graph: concept and task management, task dependencies, `search`,
   due dates with per-project timezone support, and JSON file storage.
 
-[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.0...v0.10.1

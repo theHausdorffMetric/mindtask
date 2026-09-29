@@ -67,7 +67,7 @@ mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
 mindtask config wrap-width [<COLS>]     # Get or set the description wrap width
 mindtask config wrap-width --clear      # Revert to terminal-width auto-detection
-mindtask report [-d|--description[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + task list
+mindtask report [-d|--description[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + tasks grouped by concept, in tree order
 ```
 
 Any command accepts the global `-f`/`--file <PATH>` flag to target a specific project file instead of searching from the current directory.
@@ -111,6 +111,8 @@ mindtask task due <ID> --clear
 ```
 
 The task-listing commands — `task ls`, the top-level `report`, and `concept report` — default to showing open work only (`--state todo,in_progress`). Pass `--state` with any comma-separated or repeated combination of `todo`, `in_progress`, and `done`, or `--state all` for everything. Whenever the filter hides rows, a footer accounts for them, e.g. `(hidden: 12 done — --state all to show)`. `DEPENDS ON` cells always list dependency IDs verbatim, even when the referenced task's own row is hidden.
+
+The top-level `report` is the orientation view, so its task table follows the shape of the project rather than creation order: rows are grouped by each task's *primary* concept — the first one it lists (the first `--concept` at `task add`, or the first `link`) — and the groups run in the order the tree above prints them (depth-first; a parent's own tasks before its children's). Within a group, rows ascend by ID. Each group is titled with the concept's breadcrumb, `Root › … › Name {ID}`, truncated to the wrap width; one header row and one set of column widths span the whole table. Concepts with no visible task get no group (the tree already shows them), tasks linked to no concept close the table under `(no concept)`, and a task linked to several concepts appears once, with every concept still listed in `CONCEPTS`. `task ls` remains the flat, ID-ordered list for looking a task up.
 
 Due dates accept multiple formats:
 - Date only: `2025-03-15` (midnight in project timezone)
