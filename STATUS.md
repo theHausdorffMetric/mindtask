@@ -10,7 +10,7 @@ pandoc as `just report-pdf` / `report-html` over the JSON and Markdown, with
 `templates/report.typ` + `report.css` in the package. Text output unchanged.
 Plan and the rule for what lives in the binary: `docs/OUTPUT-FORMATS-PLAN.md`
 (steps 1–5 all landed; ideas-repo tasks 234–238 under review phase 5 /
-task 141). Not yet published to crates.io.
+task 141). Published to crates.io and tagged `v0.14.0` on 2026-11-01.
 
 **0.13.0 (2026-09-29): `report` grouped by concept** — the top-level
 report's task table is grouped under each task's primary (first-listed)
