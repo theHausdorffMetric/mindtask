@@ -6,6 +6,55 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-01
+
+Output formats: the listings can be read somewhere other than a terminal.
+The binary gains Markdown and JSON; PDF and HTML come from Typst and pandoc
+over those two, via recipes in the repository (design and the rule for what
+lives where: `docs/OUTPUT-FORMATS-PLAN.md`). New flags, a new export format,
+and a new library module, so a minor bump; file format and text output are
+unchanged.
+
+### Added
+- **`--format text|md|json`** on `report`, `task ls`, `concept tree`, and
+  `schedule` (`markdown` is an alias of `md`; `text` is the default and
+  byte-identical to 0.13.0).
+  - `md`: a standalone GitHub-flavoured Markdown document per command — the
+    concept tree as a nested list (`-d` appends the lede or full text, refs as
+    links), one GFM table per concept group under its breadcrumb heading, a
+    `Description` column under `-d` and a `Refs` column when any shown task
+    has refs; cells escape `|` and turn newlines into `<br>`; the `--state`
+    footer and empty-case sentences in italics.
+  - `json`: the listing's view model, pretty-printed — `report` is
+    `{ timezone?, states, concepts, groups, hidden }`, `task ls`
+    `{ states, tasks, hidden }`, `concept tree` `{ concepts }`, `schedule`
+    `{ duration, critical_path, tasks }` with every CPM figure per task.
+    Due dates are RFC 9557 strings in the project timezone; descriptions are
+    always complete regardless of `-d`; output is structured even where the
+    text form prints a sentence.
+- **`export dot tree|dag [ROOT]`** — Graphviz DOT (alias `graphviz`): the
+  concept tree left to right (several roots under a synthetic *Project*
+  node) and the task DAG with done tasks greyed, in-progress gold, and the
+  critical path bold when the project has durations. `dot gantt`/`dot wbs`
+  return an error, like Mermaid does. Labels escape `"` and `\`.
+- **`mindtask::report`** library module — the view models (`ConceptNode`,
+  `TaskRow`, `TaskGroup`, `Hidden`; `Report`, `TaskListing`,
+  `ScheduleView`, `concept_tree`) and the primary-concept grouping with
+  breadcrumbs, moved out of the CLI. The JSON output is these types' serde
+  form.
+- **Report recipes** in the `justfile`: `report-json`, `report-md`,
+  `report-svg`, `report-pdf` (Typst over `templates/report.typ`: title,
+  concept tree, state-coloured task tables, schedule with the critical path
+  highlighted, one page per diagram), `report-html` (pandoc with
+  `templates/report.css`), `render-dot`; `states`, `desc`, `out`
+  overridable. The templates ship in the crate package.
+
+### Changed
+- `export` now lists three formats in its error for an unknown one
+  (`'plantuml', 'dot', or 'mermaid'`).
+- `claude_skill/SKILL.md`: the hand-rolled Typst recipe is replaced by the
+  `--format` section and the `just` recipes.
+
 ## [0.13.0] - 2026-09-29
 
 The whole-project report now reads by project rather than by creation
@@ -398,7 +447,8 @@ rather than a patch bump; the CLI surface is unchanged.
   dependency graph: concept and task management, task dependencies, `search`,
   due dates with per-project timezone support, and JSON file storage.
 
-[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/theHausdorffMetric/mindtask/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/theHausdorffMetric/mindtask/compare/v0.10.1...v0.11.0

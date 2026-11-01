@@ -67,7 +67,7 @@ mindtask config timezone [<IANA_TZ>]    # Get or set the project timezone
 mindtask config timezone --show         # Show the current timezone
 mindtask config wrap-width [<COLS>]     # Get or set the description wrap width
 mindtask config wrap-width --clear      # Revert to terminal-width auto-detection
-mindtask report [-d|--description[=short|full]] [--state <STATE,...>]  # Whole project: concept tree + tasks grouped by concept, in tree order
+mindtask report [-d|--description[=short|full]] [--state <STATE,...>] [--format text|md|json]  # Whole project: concept tree + tasks grouped by concept, in tree order
 ```
 
 Any command accepts the global `-f`/`--file <PATH>` flag to target a specific project file instead of searching from the current directory.
@@ -83,7 +83,7 @@ mindtask concept rm <ID>
 mindtask concept mv <ID> --parent <ID|root>          # Re-parent (append to new parent's children)
 mindtask concept mv <ID> --before <SIB>|--after <SIB> # Position among siblings (parent taken from SIB)
 mindtask concept ls
-mindtask concept tree [<ID>] [-d|--description[=short|full]]
+mindtask concept tree [<ID>] [-d|--description[=short|full]] [--format text|md|json]
 mindtask concept show <ID>
 mindtask concept report <ID> [-d|--description[=short|full]] [--state <STATE,...>]
 mindtask concept normalize [--dry-run]               # Renumber IDs to 1..n in tree (DFS pre-order) order
@@ -103,7 +103,7 @@ Tasks form a dependency DAG. Each task has a workflow state (`todo`, `in_progres
 mindtask task add <NAME> [--description <TEXT>] [--duration <DAYS>] [--due <DATE>] [--concept <ID>]...
 mindtask task edit <ID> [--name <TEXT>] [--description <TEXT>] [--clear-description] [--duration <DAYS>] [--clear-duration]
 mindtask task rm <ID>
-mindtask task ls [--state <STATE,...>] [-d|--description[=short|full]]
+mindtask task ls [--state <STATE,...>] [-d|--description[=short|full]] [--format text|md|json]
 mindtask task show <ID>
 mindtask task state <ID> <todo|in_progress|done>
 mindtask task due <ID> <DATE>
@@ -141,6 +141,73 @@ Wrapping is word-aware — a token too long to fit (a URL, a long path) is split
 To read a single task's description in full, use `task show <ID>` — it wraps to
 the same resolved width. To find which items mention a term, see
 [Search](#search).
+
+### Output formats
+
+The listing commands — `report`, `task ls`, `concept tree`, and `schedule` —
+take `--format`:
+
+| Format | Output |
+| --- | --- |
+| `text` (default) | The terminal tables and tree described above |
+| `md` (or `markdown`) | A standalone GitHub-flavoured Markdown document |
+| `json` | The listing's view model, pretty-printed |
+
+```sh
+mindtask report --format md -d=short > report.md    # a page beside the project file
+mindtask report --format json --state all > report.json
+mindtask schedule --format json | xq '.critical_path'
+```
+
+**Markdown.** Each document carries its own H1 (`# Project report`, `# Tasks`,
+`# Concepts`, `# Schedule`). The concept tree is a nested bullet list,
+`Name {ID}`; with `-d` the description follows after ` — ` (the lede for
+`=short`, the whole text otherwise) and refs follow as links. Tasks are one
+GFM table per concept group under a `###` heading (the breadcrumb), with the
+usual columns plus a `Description` column when `-d` is given and a `Refs`
+column when any shown task has refs. Relative refs stay relative to the
+project file, so write the page beside it. Cells escape `|` and turn newlines
+into `<br>`; the `--state` footer and the empty-case sentences print in
+italics.
+
+**JSON.** The shape is the `mindtask::report` types (see [Library](#library)),
+stable across patch releases:
+
+- `report` → `{ timezone?, states, concepts, groups, hidden }` — `concepts`
+  is the nested tree (`id`, `name`, `description?`, `refs?`, `children`);
+  `groups` is the grouped table (`concept` — `null` for the unlinked group —,
+  `title`, `tasks`); `hidden` counts the rows the `--state` filter removed
+  per state.
+- `task ls` → `{ states, tasks, hidden }`, the flat ID-ordered list.
+- `concept tree` → `{ concepts }`.
+- `schedule` → `{ duration, critical_path, tasks }` — `tasks` carries every
+  CPM figure per task (`earliest_start`, `latest_finish`, `slack`,
+  `critical`, …); `--critical` narrows `tasks` but `critical_path` is always
+  the full path.
+
+A task row is `{ id, name, state, description?, duration?, due?, depends_on,
+concepts, refs? }`, with `due` as an RFC 9557 string in the project
+timezone. JSON always carries the full description regardless of `-d`, and is
+structured even where the text form prints a sentence (an empty `tasks`
+array, not `No tasks.`).
+
+**PDF and HTML** are produced outside the binary from those two outputs, by
+tools you likely have: [Typst](https://typst.app) reads the JSON directly,
+pandoc turns the Markdown into a standalone page, Graphviz draws the
+diagrams. The repository's `justfile` has the recipes and
+`templates/report.typ` the Typst layout (title, concept tree, grouped task
+tables, schedule with the critical path highlighted, one page per diagram):
+
+```sh
+just report-pdf                                            # the test fixture
+just states=all report-pdf ~/project/.mindtask.json "My project"
+just desc=full report-html ~/project/.mindtask.json "My project"
+```
+
+Output lands in `build/`. `states` (`todo,in_progress` or `all`), `desc`
+(`none`, `short`, `full`) and `out` are overridable. The pieces are also
+available separately (`report-json`, `report-md`, `report-svg`) for your own
+templates.
 
 ### Dependencies
 
@@ -219,8 +286,9 @@ durations (in days) and finish-to-start dependencies: each task's earliest
 start/finish, its slack, the critical path, and the overall project duration.
 
 ```sh
-mindtask schedule              # full schedule table + critical path
-mindtask schedule --critical   # only the critical-path tasks
+mindtask schedule                 # full schedule table + critical path
+mindtask schedule --critical      # only the critical-path tasks
+mindtask schedule --format json   # every CPM figure per task, as data
 ```
 
 Times are day-offsets from the project start. Tasks without a `--duration` are
@@ -251,9 +319,12 @@ writing anything.
 
 ### Export
 
-Generate diagrams for external renderers. **`plantuml` is the only implemented
-format.** `mermaid` is accepted as a value but every call returns an error and
-exits non-zero, so a script can never mistake a placeholder for a diagram.
+Generate diagrams for external renderers. Two formats are implemented:
+**`plantuml`** for all four diagram types, and **`dot`** (Graphviz, alias
+`graphviz`) for the two that are graphs — `tree` and `dag`. `mermaid` is
+accepted as a value but every call returns an error and exits non-zero, so a
+script can never mistake a placeholder for a diagram; so do `dot gantt` and
+`dot wbs`.
 
 ```sh
 mindtask export <FORMAT> <DIAGRAM> [ROOT_ID]
@@ -261,12 +332,12 @@ mindtask export <FORMAT> <DIAGRAM> [ROOT_ID]
 
 Diagram types:
 
-| Diagram | Description | Root ID type |
-|---------|-------------|--------------|
-| `tree`  | Concept tree as a mindmap | Concept ID (renders subtree) |
-| `dag`   | Task dependency graph | Task ID (renders downstream) |
-| `gantt` | Gantt chart — CPM schedule when tasks have dependencies, else due dates | — (rejected if given) |
-| `wbs`   | Work breakdown structure (concepts + tasks) | Concept ID (renders subtree) |
+| Diagram | Description | Root ID type | Formats |
+|---------|-------------|--------------|---------|
+| `tree`  | Concept tree (mindmap / left-to-right graph) | Concept ID (renders subtree) | plantuml, dot |
+| `dag`   | Task dependency graph | Task ID (renders downstream) | plantuml, dot |
+| `gantt` | Gantt chart — CPM schedule when tasks have dependencies, else due dates | — (rejected if given) | plantuml |
+| `wbs`   | Work breakdown structure (concepts + tasks) | Concept ID (renders subtree) | plantuml |
 
 Examples:
 
@@ -278,23 +349,33 @@ mindtask export plantuml dag 1          # Task 1 and its downstream dependents
 mindtask export plantuml gantt          # Gantt chart (computed schedule, or due dates)
 mindtask export plantuml wbs            # Work breakdown structure
 mindtask export plantuml wbs 1          # WBS subtree rooted at concept 1
+mindtask export dot tree                # Concept tree as a Graphviz digraph
+mindtask export dot dag 1               # Downstream of task 1, Graphviz
 ```
 
-Output is written to stdout. Pipe to a file and render with PlantUML:
+Output is written to stdout. Pipe to a file and render with PlantUML, or
+straight into Graphviz (which needs no Java runtime):
 
 ```sh
 mindtask export plantuml dag > dag.puml
 java -jar plantuml.jar -tsvg dag.puml
+mindtask export dot dag | dot -Tsvg -o dag.svg
 ```
+
+In the DOT output, done tasks are greyed and in-progress ones gold; when the
+project has durations, the critical path — its tasks and the edges between
+them — is drawn bold. Several concept roots hang under a synthetic *Project*
+node, as in the PlantUML mindmap.
 
 #### Names in generated diagrams
 
 Names are user text written into diagram syntax that has no escape mechanism of
 its own, so a few characters are substituted to keep the output well-formed:
 whitespace runs (including newlines) collapse to a single space, `"` becomes
-`'` inside quoted labels, and `[`/`]` become `(`/`)` inside bracketed ones. A
-name that reduces to nothing renders as `(unnamed)`. Ordinary names pass
-through untouched.
+`'` inside PlantUML quoted labels, and `[`/`]` become `(`/`)` inside bracketed
+ones; DOT labels escape `"` and `\` instead, as that syntax allows. A name
+that reduces to nothing renders as `(unnamed)`. Ordinary names pass through
+untouched.
 
 Tasks are identified in the output by their ID (`t<id>`), with the name used
 only as a display label — so two tasks sharing a name stay distinct in the
@@ -368,7 +449,8 @@ mindtask is also usable as a Rust library (`use mindtask::...`):
 - `mindtask::graph` — Tree validation, DAG cycle detection, topological sort, project validation
 - `mindtask::refs` — Ref resolution against the project file's directory and the existence check (`base_dir`, `status`, `check`)
 - `mindtask::store` — JSON persistence (load/save; refuses newer format versions)
-- `mindtask::export` — Diagram generation (PlantUML; Mermaid returns an error)
+- `mindtask::report` — View models behind the listings (`Report`, `TaskListing`, `ScheduleView`, `concept_tree`; the primary-concept grouping and breadcrumbs) — also the shape of the CLI's JSON output
+- `mindtask::export` — Diagram generation (PlantUML for every diagram, Graphviz DOT for tree and dag; Mermaid returns an error)
 
 ## License
 

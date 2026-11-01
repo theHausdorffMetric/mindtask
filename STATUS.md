@@ -1,6 +1,16 @@
 # mindtask — Status
 
-## Current Phase: Refs (Phase 6.5) on top of scheduling, import, and description output (0.13.0)
+## Current Phase: Output formats (0.14.0) on top of refs, scheduling, import, and description output
+
+**0.14.0 (2026-11-01): output formats** — `--format text|md|json` on
+`report`, `task ls`, `concept tree`, `schedule`; `export dot tree|dag`
+(Graphviz, renderable without Java); the view models behind the listings as
+the library module `report` (also the JSON shape); PDF via Typst and HTML via
+pandoc as `just report-pdf` / `report-html` over the JSON and Markdown, with
+`templates/report.typ` + `report.css` in the package. Text output unchanged.
+Plan and the rule for what lives in the binary: `docs/OUTPUT-FORMATS-PLAN.md`
+(steps 1–5 all landed; ideas-repo tasks 234–238 under review phase 5 /
+task 141). Not yet published to crates.io.
 
 **0.13.0 (2026-09-29): `report` grouped by concept** — the top-level
 report's task table is grouped under each task's primary (first-listed)
@@ -196,7 +206,8 @@ src/
 - [ ] First ref of a node as a PlantUML `[[…]]` hyperlink; settle the base for relative refs first (`docs/REFS-PLAN.md`)
 
 ### Phase 7: Polish
-- [ ] Mermaid diagram export
+- [ ] Mermaid diagram export (only renders by itself on GitHub — deferred in `docs/OUTPUT-FORMATS-PLAN.md`)
+- [ ] `concept report --format` (same view models; add when wanted)
 - [ ] Colored terminal output
 - [ ] Shell completions
 
