@@ -95,7 +95,7 @@ fn write_concept(
 /// Generate a DOT digraph of the task dependency DAG, dependencies on the
 /// left. Done tasks are greyed, in-progress ones gold; when the project has
 /// durations, the critical path — its tasks and the edges between them — is
-/// drawn bold in [`CRITICAL`].
+/// drawn bold in tomato.
 ///
 /// If `root_id` is given, only that task and all downstream dependents are
 /// shown. The caller must ensure the task exists.
