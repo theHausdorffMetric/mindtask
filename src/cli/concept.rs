@@ -7,7 +7,9 @@ use mindtask::model::concept::Concept;
 use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::project::{Placement, Project};
 use mindtask::model::reference::RefOwner;
+use mindtask::report::{Hidden, concept_tree};
 
+use super::format::{OutputFormat, print_json};
 use super::reference::print_refs;
 use super::render::{
     DescMode, avail_width, desc_text, render_table, render_table_with_blocks, resolve_wrap_width,
@@ -256,7 +258,33 @@ pub fn show(project: &Project, id: ConceptId) -> Result<()> {
     Ok(())
 }
 
-pub fn tree(project: &Project, root_id: Option<ConceptId>, show_desc: DescMode) -> Result<()> {
+pub fn tree(
+    project: &Project,
+    root_id: Option<ConceptId>,
+    show_desc: DescMode,
+    format: OutputFormat,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            let nodes = concept_tree(project, root_id).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "concept {} not found",
+                    root_id.expect("None always resolves")
+                )
+            })?;
+            print_json(&serde_json::json!({ "concepts": nodes }))
+        }
+        OutputFormat::Text => tree_text(project, root_id, show_desc),
+    }
+}
+
+/// The terminal rendering of the concept tree — also the first half of the
+/// text `report`.
+pub(super) fn tree_text(
+    project: &Project,
+    root_id: Option<ConceptId>,
+    show_desc: DescMode,
+) -> Result<()> {
     if project.concepts.is_empty() {
         println!("No concepts.");
         return Ok(());
@@ -466,11 +494,13 @@ pub fn report(
         );
     }
 
-    let hidden = project
-        .tasks
-        .iter()
-        .filter(|t| all_task_ids.contains(&t.id) && !visible_ids.contains(&t.id));
-    if let Some(footer) = hidden_footer(hidden) {
+    let hidden = Hidden::count(
+        project
+            .tasks
+            .iter()
+            .filter(|t| all_task_ids.contains(&t.id) && !visible_ids.contains(&t.id)),
+    );
+    if let Some(footer) = hidden_footer(&hidden) {
         println!("{footer}");
     }
 

@@ -5,7 +5,9 @@ use mindtask::model::project::Project;
 use mindtask::model::reference::RefOwner;
 use mindtask::model::task::{Task, TaskState, parse_due};
 use mindtask::model::validate::{validate_duration, validate_ref};
+use mindtask::report::{TaskListing, TaskRow};
 
+use super::format::{OutputFormat, print_json};
 use super::reference::print_refs;
 use super::render::{
     DESC_INDENT, DescMode, desc_block, render_table_with_blocks, resolve_wrap_width, wrap_block,
@@ -44,21 +46,17 @@ fn format_due(due: &jiff::Zoned, project: &Project) -> String {
     }
 }
 
-/// Format a short due date for list columns (date + time, no seconds).
-pub(super) fn format_due_short(due: &jiff::Zoned, project: &Project) -> String {
-    let tz_name = project.timezone_or_utc();
-    let z = if let Ok(tz) = jiff::tz::TimeZone::get(tz_name) {
-        due.with_time_zone(tz)
-    } else {
-        due.clone()
-    };
+/// Format a short due date for list columns (date + time, no seconds). The
+/// value is printed in its own zone — view-model rows already carry the
+/// project timezone (see [`TaskRow::from_task`]).
+pub(super) fn format_due_short(due: &jiff::Zoned) -> String {
     format!(
         "{}-{:02}-{:02} {:02}:{:02}",
-        z.year(),
-        z.month(),
-        z.day(),
-        z.hour(),
-        z.minute()
+        due.year(),
+        due.month(),
+        due.day(),
+        due.hour(),
+        due.minute()
     )
 }
 
@@ -76,29 +74,42 @@ pub(super) fn join_ids<T: std::fmt::Display>(ids: &[T]) -> String {
 
 /// The shared leading cells of a task-table row: ID, NAME, STATE, DUE,
 /// DEPENDS ON. Callers append the final column (CONCEPTS, or a report marker).
-pub(super) fn task_cells(task: &Task, project: &Project) -> Vec<String> {
-    let due = task
+pub(super) fn row_cells(row: &TaskRow) -> Vec<String> {
+    let due = row
         .due
         .as_ref()
-        .map(|d| format_due_short(d, project))
+        .map(format_due_short)
         .unwrap_or_else(|| "-".to_string());
     vec![
-        task.id.to_string(),
-        task.name.clone(),
-        task.state.to_string(),
+        row.id.to_string(),
+        row.name.clone(),
+        row.state.to_string(),
         due,
-        join_ids(&task.depends_on),
+        join_ids(&row.depends_on),
     ]
+}
+
+/// [`row_cells`] for a task straight from the project — the listings that
+/// select tasks themselves (`search`, `concept report`) use this.
+pub(super) fn task_cells(task: &Task, project: &Project) -> Vec<String> {
+    row_cells(&TaskRow::from_task(task, project))
 }
 
 /// The description block that sits beneath a task's table row, or `None` when
 /// the task has no description or none was requested. Shared by every task
-/// listing — `task ls`, `search`, and `concept report` — so `-d` renders
+/// listing — `task ls`, `report`, and `concept report` — so `-d` renders
 /// identically wherever tasks are tabulated.
+pub(super) fn desc_block_for(
+    description: Option<&str>,
+    mode: DescMode,
+    width: usize,
+) -> Option<String> {
+    description.and_then(|desc| desc_block(desc, mode, DESC_INDENT, width))
+}
+
+/// [`desc_block_for`] on a task straight from the project.
 pub(super) fn task_desc_block(task: &Task, mode: DescMode, width: usize) -> Option<String> {
-    task.description
-        .as_deref()
-        .and_then(|desc| desc_block(desc, mode, DESC_INDENT, width))
+    desc_block_for(task.description.as_deref(), mode, width)
 }
 
 pub fn add(
@@ -207,43 +218,55 @@ pub fn remove(project: &mut Project, id: TaskId) -> Result<()> {
     Ok(())
 }
 
-pub fn list(project: &Project, filter: &StateFilter, desc: DescMode) {
+/// Column headers of every task table that ends in the CONCEPTS column.
+pub(super) const TASK_HEADERS: [&str; 6] = ["ID", "NAME", "STATE", "DUE", "DEPENDS ON", "CONCEPTS"];
+
+pub fn list(
+    project: &Project,
+    filter: &StateFilter,
+    desc: DescMode,
+    format: OutputFormat,
+) -> Result<()> {
+    let listing = TaskListing::build(project, &filter.states());
+    match format {
+        OutputFormat::Json => print_json(&listing),
+        OutputFormat::Text => {
+            list_text(project, &listing, desc);
+            Ok(())
+        }
+    }
+}
+
+fn list_text(project: &Project, listing: &TaskListing, desc: DescMode) {
     if project.tasks.is_empty() {
         println!("No tasks.");
         return;
     }
 
-    let (shown, hidden): (Vec<&Task>, Vec<&Task>) =
-        project.tasks.iter().partition(|t| filter.keeps(t.state));
-
-    if shown.is_empty() {
+    if listing.tasks.is_empty() {
         println!("No tasks in the selected states.");
     } else {
         let width = resolve_wrap_width(project);
-        let rows: Vec<Vec<String>> = shown
+        let rows: Vec<Vec<String>> = listing
+            .tasks
             .iter()
-            .map(|&task| {
-                let mut cells = task_cells(task, project);
-                cells.push(join_ids(&task.concepts));
+            .map(|row| {
+                let mut cells = row_cells(row);
+                cells.push(join_ids(&row.concepts));
                 cells
             })
             .collect();
-        let blocks: Vec<Option<String>> = shown
+        let blocks: Vec<Option<String>> = listing
+            .tasks
             .iter()
-            .map(|&task| task_desc_block(task, desc, width))
+            .map(|row| desc_block_for(row.description.as_deref(), desc, width))
             .collect();
         println!(
             "{}",
-            render_table_with_blocks(
-                &["ID", "NAME", "STATE", "DUE", "DEPENDS ON", "CONCEPTS"],
-                &rows,
-                &blocks,
-                Some(1),
-                width,
-            )
+            render_table_with_blocks(&TASK_HEADERS, &rows, &blocks, Some(1), width)
         );
     }
-    if let Some(footer) = hidden_footer(hidden) {
+    if let Some(footer) = hidden_footer(&listing.hidden) {
         println!("{footer}");
     }
 }

@@ -7,7 +7,8 @@
 
 use std::str::FromStr;
 
-use mindtask::model::task::{Task, TaskState};
+use mindtask::model::task::TaskState;
+use mindtask::report::Hidden;
 
 /// Every state, in display order (also the footer's count order).
 const ALL_STATES: [TaskState; 3] = [TaskState::Todo, TaskState::InProgress, TaskState::Done];
@@ -61,18 +62,17 @@ impl StateFilter {
     pub fn keeps(&self, state: TaskState) -> bool {
         self.keep[index(state)]
     }
+
+    /// The kept states, in display order — what the view models record.
+    pub fn states(&self) -> Vec<TaskState> {
+        ALL_STATES.into_iter().filter(|&s| self.keeps(s)).collect()
+    }
 }
 
 /// The one-line footer accounting for rows the filter removed, e.g.
 /// `(hidden: 2 done — --state all to show)`, or `None` when nothing was.
-pub fn hidden_footer<'a, I>(hidden: I) -> Option<String>
-where
-    I: IntoIterator<Item = &'a Task>,
-{
-    let mut counts = [0usize; 3];
-    for task in hidden {
-        counts[index(task.state)] += 1;
-    }
+pub fn hidden_footer(hidden: &Hidden) -> Option<String> {
+    let counts = [hidden.todo, hidden.in_progress, hidden.done];
     let parts: Vec<String> = ALL_STATES
         .iter()
         .zip(counts)
@@ -93,6 +93,7 @@ where
 mod tests {
     use super::*;
     use mindtask::model::id::TaskId;
+    use mindtask::model::task::Task;
 
     fn task(id: u64, state: TaskState) -> Task {
         Task {
@@ -143,6 +144,7 @@ mod tests {
         assert!(f.keeps(TaskState::Todo));
         assert!(f.keeps(TaskState::InProgress));
         assert!(!f.keeps(TaskState::Done));
+        assert_eq!(f.states(), [TaskState::Todo, TaskState::InProgress]);
     }
 
     #[test]
@@ -151,6 +153,7 @@ mod tests {
         for s in ALL_STATES {
             assert!(f.keeps(s));
         }
+        assert_eq!(f.states(), ALL_STATES);
     }
 
     #[test]
@@ -161,13 +164,13 @@ mod tests {
             task(3, TaskState::Done),
         ];
         assert_eq!(
-            hidden_footer(tasks.iter()).unwrap(),
+            hidden_footer(&Hidden::count(tasks.iter())).unwrap(),
             "(hidden: 1 todo, 2 done — --state all to show)"
         );
     }
 
     #[test]
     fn footer_absent_when_nothing_hidden() {
-        assert_eq!(hidden_footer([].iter()), None);
+        assert_eq!(hidden_footer(&Hidden::default()), None);
     }
 }

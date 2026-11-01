@@ -15,10 +15,14 @@
 //!   and returns an error) for visualization.
 //! - [`import`] — Concept-graph JSONL ingestion: project an `is-a` DAG onto
 //!   the strict tree and merge it under a target concept.
+//! - [`report`] — View models behind the listings (`report`, `task ls`,
+//!   `concept tree`, `schedule`): what each shows, independent of rendering;
+//!   also the shape of the CLI's JSON output.
 
 pub mod export;
 pub mod graph;
 pub mod import;
 pub mod model;
 pub mod refs;
+pub mod report;
 pub mod store;

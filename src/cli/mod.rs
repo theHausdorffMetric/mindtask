@@ -1,5 +1,6 @@
 mod concept;
 mod config;
+mod format;
 mod import;
 mod project;
 mod reference;
@@ -19,6 +20,7 @@ use mindtask::model::id::{ConceptId, TaskId};
 use mindtask::model::reference::RefOwner;
 use mindtask::model::task::TaskState;
 
+use format::OutputFormat;
 use render::DescMode;
 use state_filter::{StateArg, StateFilter};
 
@@ -118,12 +120,18 @@ enum Command {
             default_value = "todo,in_progress"
         )]
         state: Vec<StateArg>,
+        /// Output format
+        #[arg(long, value_enum, default_value_t)]
+        format: OutputFormat,
     },
     /// Show the computed schedule: earliest start/finish, slack, critical path
     Schedule {
         /// Show only tasks on the critical path
         #[arg(long)]
         critical: bool,
+        /// Output format
+        #[arg(long, value_enum, default_value_t)]
+        format: OutputFormat,
     },
     /// Validate the project file: tree, DAG, cross-references, and that every
     /// relative ref points at an existing file
@@ -218,6 +226,9 @@ enum ConceptCommand {
             default_missing_value = "full"
         )]
         description: Option<DescMode>,
+        /// Output format
+        #[arg(long, value_enum, default_value_t)]
+        format: OutputFormat,
     },
     /// Show details of a concept
     Show {
@@ -326,6 +337,9 @@ enum TaskCommand {
             default_missing_value = "full"
         )]
         description: Option<DescMode>,
+        /// Output format
+        #[arg(long, value_enum, default_value_t)]
+        format: OutputFormat,
     },
     /// Show details of a task
     Show {
@@ -507,19 +521,24 @@ pub fn run() -> Result<()> {
 
     match command {
         Command::Init { timezone } => project::init(timezone),
-        Command::Report { description, state } => {
+        Command::Report {
+            description,
+            state,
+            format,
+        } => {
             let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
             report::run(
                 &proj,
                 &StateFilter::new(&state),
                 description.unwrap_or_default(),
+                format,
             )
         }
-        Command::Schedule { critical } => {
+        Command::Schedule { critical, format } => {
             let path = resolve_project_file(file)?;
             let proj = load_project(&path)?;
-            schedule::run(&proj, critical)
+            schedule::run(&proj, critical, format)
         }
         Command::Validate => {
             let path = resolve_project_file(file)?;
@@ -556,8 +575,12 @@ pub fn run() -> Result<()> {
                     concept::list(&proj);
                     return Ok(());
                 }
-                ConceptCommand::Tree { id, description } => {
-                    concept::tree(&proj, id, description.unwrap_or_default())?;
+                ConceptCommand::Tree {
+                    id,
+                    description,
+                    format,
+                } => {
+                    concept::tree(&proj, id, description.unwrap_or_default(), format)?;
                     return Ok(());
                 }
                 ConceptCommand::Show { id } => {
@@ -615,12 +638,17 @@ pub fn run() -> Result<()> {
                     clear_duration,
                 )?,
                 TaskCommand::Rm { id } => task::remove(&mut proj, id)?,
-                TaskCommand::Ls { state, description } => {
+                TaskCommand::Ls {
+                    state,
+                    description,
+                    format,
+                } => {
                     task::list(
                         &proj,
                         &StateFilter::new(&state),
                         description.unwrap_or_default(),
-                    );
+                        format,
+                    )?;
                     return Ok(());
                 }
                 TaskCommand::Show { id } => {
