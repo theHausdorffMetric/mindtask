@@ -8,6 +8,7 @@ use mindtask::model::validate::{validate_duration, validate_ref};
 use mindtask::report::{TaskListing, TaskRow};
 
 use super::format::{OutputFormat, print_json};
+use super::markdown;
 use super::reference::print_refs;
 use super::render::{
     DESC_INDENT, DescMode, desc_block, render_table_with_blocks, resolve_wrap_width, wrap_block,
@@ -230,6 +231,10 @@ pub fn list(
     let listing = TaskListing::build(project, &filter.states());
     match format {
         OutputFormat::Json => print_json(&listing),
+        OutputFormat::Md => {
+            print!("{}", markdown::task_listing(project, &listing, desc));
+            Ok(())
+        }
         OutputFormat::Text => {
             list_text(project, &listing, desc);
             Ok(())

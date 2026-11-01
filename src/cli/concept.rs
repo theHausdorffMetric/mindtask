@@ -264,17 +264,26 @@ pub fn tree(
     show_desc: DescMode,
     format: OutputFormat,
 ) -> Result<()> {
+    if format == OutputFormat::Text {
+        return tree_text(project, root_id, show_desc);
+    }
+    let nodes = concept_tree(project, root_id).ok_or_else(|| {
+        anyhow::anyhow!(
+            "concept {} not found",
+            root_id.expect("a missing root is always a named one")
+        )
+    })?;
     match format {
-        OutputFormat::Json => {
-            let nodes = concept_tree(project, root_id).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "concept {} not found",
-                    root_id.expect("None always resolves")
-                )
-            })?;
-            print_json(&serde_json::json!({ "concepts": nodes }))
+        OutputFormat::Json => print_json(&serde_json::json!({ "concepts": nodes })),
+        OutputFormat::Md => {
+            let width = resolve_wrap_width(project);
+            print!(
+                "{}",
+                super::markdown::concept_tree(&nodes, show_desc, width)
+            );
+            Ok(())
         }
-        OutputFormat::Text => tree_text(project, root_id, show_desc),
+        OutputFormat::Text => unreachable!("handled above"),
     }
 }
 

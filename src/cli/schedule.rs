@@ -7,6 +7,7 @@ use mindtask::model::project::Project;
 use mindtask::report::ScheduleView;
 
 use super::format::{OutputFormat, print_json};
+use super::markdown;
 use super::render::{render_table, resolve_wrap_width};
 
 /// Format a day value, trimming trailing zeros (`2`, `1.5`, `0`).
@@ -46,6 +47,10 @@ pub fn run(project: &Project, critical_only: bool, format: OutputFormat) -> Resu
     let view = ScheduleView::build(project, critical_only).map_err(|e| anyhow::anyhow!(e))?;
     match format {
         OutputFormat::Json => print_json(&view),
+        OutputFormat::Md => {
+            print!("{}", markdown::schedule(project, &view));
+            Ok(())
+        }
         OutputFormat::Text => {
             run_text(project, &view);
             Ok(())

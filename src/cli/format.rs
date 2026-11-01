@@ -10,6 +10,10 @@ pub enum OutputFormat {
     /// Terminal tables and trees (the default).
     #[default]
     Text,
+    /// GitHub-flavoured Markdown: a standalone page with tables and a
+    /// nested list for the tree.
+    #[value(alias = "markdown")]
+    Md,
     /// The listing's view model as pretty-printed JSON.
     Json,
 }

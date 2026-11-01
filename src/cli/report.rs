@@ -13,6 +13,7 @@ use mindtask::report::Report;
 
 use super::concept;
 use super::format::{OutputFormat, print_json};
+use super::markdown;
 use super::render::{DescMode, TableGroup, render_table_grouped, resolve_wrap_width};
 use super::state_filter::{StateFilter, hidden_footer};
 use super::task::{TASK_HEADERS, desc_block_for, join_ids, row_cells};
@@ -26,6 +27,10 @@ pub fn run(
     let report = Report::build(project, &filter.states());
     match format {
         OutputFormat::Json => print_json(&report),
+        OutputFormat::Md => {
+            print!("{}", markdown::report(project, &report, desc));
+            Ok(())
+        }
         OutputFormat::Text => {
             concept::tree_text(project, None, desc)?;
             println!();

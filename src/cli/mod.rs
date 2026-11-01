@@ -2,6 +2,7 @@ mod concept;
 mod config;
 mod format;
 mod import;
+mod markdown;
 mod project;
 mod reference;
 mod render;
