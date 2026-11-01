@@ -1,0 +1,32 @@
+/* mindtask project report — stylesheet for `just report-html`, which runs the
+   Markdown output through pandoc --standalone --embed-resources. */
+:root {
+  color-scheme: light dark;
+  --fg: #1b1b1b;
+  --muted: #6a6a6a;
+  --line: #c9c9c9;
+  --head: #ececec;
+  --bg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --fg: #e6e6e6; --muted: #9a9a9a; --line: #444; --head: #2a2a2a; --bg: #161616; }
+}
+html { background: var(--bg); color: var(--fg); }
+body {
+  font: 14px/1.45 system-ui, "DejaVu Sans", sans-serif;
+  max-width: 72rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+h1 { font-size: 1.7rem; margin-bottom: 0.2rem; }
+h2 { font-size: 1.25rem; margin-top: 2rem; border-bottom: 1px solid var(--line); padding-bottom: 0.2rem; }
+h3 { font-size: 0.95rem; margin: 1.4rem 0 0.4rem; color: var(--muted); }
+ul { padding-left: 1.3rem; }
+li { margin: 0.15rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9em; margin: 0.4rem 0 1rem; }
+th, td { border: 1px solid var(--line); padding: 0.3rem 0.5rem; vertical-align: top; text-align: left; }
+th { background: var(--head); }
+td:first-child, th:first-child { text-align: right; white-space: nowrap; }
+em { color: var(--muted); }
+a { color: inherit; }
+code { font-size: 0.9em; }
