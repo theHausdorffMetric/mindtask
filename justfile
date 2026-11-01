@@ -58,3 +58,16 @@ render-svg: render
 # Remove generated output files
 clean-output:
     rm -rf {{ out_dir }}
+
+# Render the fixture's concept tree and task DAG to SVG via Graphviz (requires dot)
+render-dot: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v dot >/dev/null || { echo "missing required tool: dot (graphviz)"; exit 1; }
+    mkdir -p {{ out_dir }}
+    BIN="{{ justfile_directory() }}/target/debug/mindtask"
+    for d in tree dag; do
+        "$BIN" -f {{ fixture }} export dot "$d" > "{{ out_dir }}/$d.dot"
+        dot -Tsvg "{{ out_dir }}/$d.dot" -o "{{ out_dir }}/$d.svg"
+    done
+    echo "Wrote tree.svg and dag.svg to {{ out_dir }}/"

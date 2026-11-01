@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
 
+use super::one_line;
 use crate::graph::schedule::{Schedule, ScheduledTask, schedule};
 use crate::model::concept::Concept;
 use crate::model::id::{ConceptId, TaskId};
@@ -15,22 +16,8 @@ use crate::model::task::{Task, TaskState};
 // no escape mechanism for its structural characters. PlantUML would either
 // reject the output or — worse — accept a mangled version, so offending
 // characters are substituted with visually equivalent safe ones rather than
-// escaped.
-
-/// Placeholder for a name that sanitises to nothing.
-const UNNAMED: &str = "(unnamed)";
-
-/// Collapse every whitespace run — newlines and tabs included — to a single
-/// space, and trim. PlantUML is line-oriented: an embedded newline would split
-/// one declaration across two lines, silently producing a different diagram.
-fn one_line(s: &str) -> String {
-    let joined = s.split_whitespace().collect::<Vec<_>>().join(" ");
-    if joined.is_empty() {
-        UNNAMED.to_string()
-    } else {
-        joined
-    }
-}
+// escaped. Whitespace collapsing is shared with the other exporters — see
+// [`one_line`].
 
 /// Label for a `"…"`-quoted position (component names). A literal `"` closes
 /// the string early; PlantUML has no escape for it, so it becomes an apostrophe.
@@ -138,8 +125,9 @@ pub fn dag(project: &Project, root_id: Option<TaskId>) -> String {
     out
 }
 
-/// Collect a task and all tasks that transitively depend on it.
-fn collect_downstream(project: &Project, root_id: TaskId) -> Vec<&Task> {
+/// Collect a task and all tasks that transitively depend on it, in project
+/// order.
+pub(super) fn collect_downstream(project: &Project, root_id: TaskId) -> Vec<&Task> {
     // Build reverse adjacency: task -> tasks that depend on it
     let mut dependents: HashMap<TaskId, Vec<TaskId>> = HashMap::new();
     for task in &project.tasks {
@@ -391,6 +379,7 @@ fn write_wbs_concept(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::export::UNNAMED;
     use crate::model::project::Project;
 
     fn sample_project() -> Project {

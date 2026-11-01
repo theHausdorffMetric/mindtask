@@ -2,9 +2,12 @@
 //!
 //! Supported formats:
 //! - [`Format::PlantUml`] — generates PlantUML syntax for tree, DAG, Gantt, and WBS diagrams.
+//! - [`Format::Dot`] — Graphviz DOT for the two diagrams that are graphs,
+//!   tree and DAG; Gantt and WBS return `Err`.
 //! - [`Format::Mermaid`] — accepted but not implemented; every call returns
 //!   `Err`, so a script never mistakes a placeholder for a diagram.
 
+pub mod dot;
 pub mod mermaid;
 pub mod plantuml;
 
@@ -14,10 +17,27 @@ use std::str::FromStr;
 use crate::model::id::{ConceptId, TaskId};
 use crate::model::project::Project;
 
+/// Placeholder for a name that sanitises to nothing.
+pub(crate) const UNNAMED: &str = "(unnamed)";
+
+/// Collapse every whitespace run — newlines and tabs included — to a single
+/// space, and trim. Diagram syntaxes are line-oriented: an embedded newline
+/// would split one declaration across two lines, silently producing a
+/// different diagram. An empty result becomes [`UNNAMED`].
+pub(crate) fn one_line(s: &str) -> String {
+    let joined = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if joined.is_empty() {
+        UNNAMED.to_string()
+    } else {
+        joined
+    }
+}
+
 /// Output format for diagram generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     PlantUml,
+    Dot,
     Mermaid,
 }
 
@@ -25,6 +45,7 @@ impl fmt::Display for Format {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::PlantUml => write!(f, "plantuml"),
+            Self::Dot => write!(f, "dot"),
             Self::Mermaid => write!(f, "mermaid"),
         }
     }
@@ -36,9 +57,10 @@ impl FromStr for Format {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "plantuml" => Ok(Self::PlantUml),
+            "dot" | "graphviz" => Ok(Self::Dot),
             "mermaid" => Ok(Self::Mermaid),
             _ => Err(format!(
-                "invalid format '{s}': expected 'plantuml' or 'mermaid'"
+                "invalid format '{s}': expected 'plantuml', 'dot', or 'mermaid'"
             )),
         }
     }
@@ -96,6 +118,7 @@ pub fn render(
     }
     match format {
         Format::PlantUml => render_plantuml(project, kind, root),
+        Format::Dot => render_dot(project, kind, root),
         Format::Mermaid => render_mermaid(project, kind, root),
     }
 }
@@ -148,6 +171,23 @@ fn render_plantuml(
     }
 }
 
+fn render_dot(project: &Project, kind: DiagramKind, root: Option<&str>) -> Result<String, String> {
+    match kind {
+        DiagramKind::Tree => {
+            let root_id = parse_concept_root(project, root)?;
+            Ok(dot::tree(project, root_id))
+        }
+        DiagramKind::Dag => {
+            let root_id = parse_task_root(project, root)?;
+            Ok(dot::dag(project, root_id))
+        }
+        DiagramKind::Gantt | DiagramKind::Wbs => Err(format!(
+            "dot {kind} export is not implemented (Graphviz draws graphs, not charts); \
+             use 'plantuml' instead"
+        )),
+    }
+}
+
 fn render_mermaid(
     project: &Project,
     kind: DiagramKind,
@@ -186,10 +226,32 @@ mod tests {
     #[test]
     fn gantt_rejects_root() {
         let p = sample_project();
-        for format in [Format::PlantUml, Format::Mermaid] {
+        for format in [Format::PlantUml, Format::Dot, Format::Mermaid] {
             let err = render(&p, format, DiagramKind::Gantt, Some("1")).unwrap_err();
             assert!(err.contains("gantt"), "{err}");
         }
+    }
+
+    #[test]
+    fn dot_covers_graphs_only() {
+        let p = sample_project();
+        assert!(render(&p, Format::Dot, DiagramKind::Tree, None).is_ok());
+        assert!(render(&p, Format::Dot, DiagramKind::Dag, Some("1")).is_ok());
+        for kind in [DiagramKind::Gantt, DiagramKind::Wbs] {
+            let err = render(&p, Format::Dot, kind, None).unwrap_err();
+            assert!(err.contains("not implemented"), "{err}");
+            assert!(err.contains("plantuml"), "{err}");
+        }
+        let err = render(&p, Format::Dot, DiagramKind::Dag, Some("99")).unwrap_err();
+        assert!(err.contains("not found"), "{err}");
+        assert_eq!("graphviz".parse::<Format>().unwrap(), Format::Dot);
+        assert!("svg".parse::<Format>().unwrap_err().contains("'dot'"));
+    }
+
+    #[test]
+    fn one_line_collapses_whitespace_and_names_the_empty() {
+        assert_eq!(one_line("  a\n\tb  c "), "a b c");
+        assert_eq!(one_line(" \n "), UNNAMED);
     }
 
     #[test]
